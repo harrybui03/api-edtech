@@ -1,9 +1,17 @@
+buildscript {
+	dependencies {
+		classpath("org.postgresql:postgresql:42.7.1")
+		classpath("org.flywaydb:flyway-database-postgresql:10.4.1")
+	}
+}
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.3'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'org.hibernate.orm' version '6.6.18.Final'
 	id 'org.graalvm.buildtools.native' version '0.10.6'
+	id "org.flywaydb.flyway" version "10.0.0"
 }
 
 group = 'com.example'
@@ -13,6 +21,16 @@ java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(24)
 	}
+}
+
+flyway {
+	url = 'jdbc:postgresql://localhost:5432/postgres'
+	user = 'postgres'
+	password = 'postgres'
+	locations = ['classpath:db/migration']
+	driver = 'org.postgresql.Driver'
+	outOfOrder = true
+	cleanDisabled = false
 }
 
 configurations {
@@ -35,8 +53,12 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.modulith:spring-modulith-starter-core'
 	implementation 'org.springframework.modulith:spring-modulith-starter-jpa'
+	implementation 'org.flywaydb:flyway-database-postgresql'
 	compileOnly 'org.projectlombok:lombok'
+
 	runtimeOnly 'org.postgresql:postgresql'
+	runtimeOnly 'org.flywaydb:flyway-database-postgresql:10.4.1'
+
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
