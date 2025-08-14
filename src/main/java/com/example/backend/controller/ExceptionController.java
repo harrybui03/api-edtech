@@ -33,7 +33,7 @@ public class ExceptionController {
     }
 
     private void logException(Throwable exception){
-        log.error(String.format("Message=\"%s\", exception=%s", exception.getMessage(), exception));
+        log.error("Message=\"{}\", exception={}", exception.getMessage(), exception);
     }
 
 }
