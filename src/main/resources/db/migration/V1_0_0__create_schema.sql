@@ -1,8 +1,5 @@
--- Migration: 1_create_frappe_lms_schema
--- Date: 2025-08-03
-
 -- UP
--- This section creates all tables, custom ENUM types, and functions for the Frappe Learning LMS.
+-- This section creates all tables and functions for the Frappe Learning LMS.
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Custom function to update the 'modified' timestamp
@@ -14,23 +11,6 @@ RETURN NEW;
 END;
 $$ language 'plpgsql';
 
--- 1. ENUMS (Custom types for PostgreSQL)
--- These must be created before the tables that use them.
-CREATE TYPE user_type_enum AS ENUM('SYSTEM_USER', 'WEBSITE_USER');
-CREATE TYPE user_role_enum AS ENUM('SYSTEM_MANAGER', 'MODERATOR', 'COURSE_CREATOR', 'BATCH_EVALUATOR', 'LMS_STUDENT');
-CREATE TYPE course_status_enum AS ENUM('IN_PROGRESS', 'UNDER_REVIEW', 'APPROVED');
-CREATE TYPE enrollment_member_type_enum AS ENUM('STUDENT', 'MENTOR', 'STAFF');
-CREATE TYPE enrollment_role_enum AS ENUM('MEMBER', 'ADMIN');
-CREATE TYPE course_progress_status_enum AS ENUM('COMPLETE', 'PARTIALLY_COMPLETE', 'INCOMPLETE');
-CREATE TYPE batch_medium_enum AS ENUM('ONLINE', 'OFFLINE');
-CREATE TYPE assignment_type_enum AS ENUM('DOCUMENT', 'PDF', 'URL', 'IMAGE', 'TEXT');
-CREATE TYPE assignment_status_enum AS ENUM('PASS', 'FAIL', 'NOT_GRADED', 'NOT_APPLICABLE');
-CREATE TYPE quiz_question_type_enum AS ENUM('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TEXT', 'NUMBER');
-CREATE TYPE programming_exercise_status_enum AS ENUM('PASSED', 'FAILED');
-CREATE TYPE certificate_request_status_enum AS ENUM('UPCOMING', 'COMPLETED', 'CANCELLED');
-CREATE TYPE job_type_enum AS ENUM('FULL_TIME', 'PART_TIME', 'FREELANCE', 'CONTRACT');
-CREATE TYPE job_status_enum AS ENUM('OPEN', 'CLOSED');
-
 -- 2. TABLES
 -- BẢNG NGƯỜI DÙNG VÀ PHÂN QUYỀN
 CREATE TABLE users (
@@ -40,7 +20,7 @@ CREATE TABLE users (
                        full_name VARCHAR(255) NOT NULL,
                        user_image VARCHAR(255),
                        enabled BOOLEAN DEFAULT TRUE,
-                       user_type user_type_enum DEFAULT 'WEBSITE_USER',
+                       user_type VARCHAR(50) DEFAULT 'WEBSITE_USER' CHECK (user_type IN ('SYSTEM_USER', 'WEBSITE_USER')),
                        last_active TIMESTAMPTZ,
                        creation TIMESTAMPTZ DEFAULT NOW(),
                        modified TIMESTAMPTZ DEFAULT NOW(),
@@ -50,7 +30,7 @@ CREATE TABLE users (
 CREATE TABLE user_roles (
                             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                             user_id UUID NOT NULL,
-                            role user_role_enum NOT NULL,
+                            role VARCHAR(50) NOT NULL CHECK (role IN ('SYSTEM_MANAGER', 'MODERATOR', 'COURSE_CREATOR', 'BATCH_EVALUATOR', 'LMS_STUDENT')),
                             creation TIMESTAMPTZ DEFAULT NOW(),
                             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                             UNIQUE (user_id, role)
@@ -66,7 +46,7 @@ CREATE TABLE courses (
                          video_link VARCHAR(500),
                          tags VARCHAR(500),
                          category VARCHAR(255),
-                         status course_status_enum DEFAULT 'IN_PROGRESS',
+                         status VARCHAR(50) DEFAULT 'IN_PROGRESS' CHECK (status IN ('IN_PROGRESS', 'UNDER_REVIEW', 'APPROVED')),
                          published BOOLEAN DEFAULT FALSE,
                          published_on DATE,
                          upcoming BOOLEAN DEFAULT FALSE,
@@ -134,8 +114,8 @@ CREATE TABLE enrollments (
                              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                              member_id UUID NOT NULL,
                              course_id UUID NOT NULL,
-                             member_type enrollment_member_type_enum DEFAULT 'STUDENT',
-                             role enrollment_role_enum DEFAULT 'MEMBER',
+                             member_type VARCHAR(50) DEFAULT 'STUDENT' CHECK (member_type IN ('STUDENT', 'MENTOR', 'STAFF')),
+                             role VARCHAR(50) DEFAULT 'MEMBER' CHECK (role IN ('MEMBER', 'ADMIN')),
                              progress DECIMAL(5,2) DEFAULT 0,
                              current_lesson UUID,
                              payment_id UUID,
@@ -149,9 +129,6 @@ CREATE TABLE enrollments (
                              FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
                              FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
                              FOREIGN KEY (current_lesson) REFERENCES lessons(id),
-    -- NOTE: 'certificates' table needs to exist before this FK can be created.
-    -- Assuming a 'certificates' table will be created later.
-    -- FOREIGN KEY (certificate_id) REFERENCES certificates(id),
                              UNIQUE (member_id, course_id)
 );
 
@@ -161,7 +138,7 @@ CREATE TABLE course_progress (
                                  lesson_id UUID NOT NULL,
                                  chapter_id UUID NOT NULL,
                                  course_id UUID NOT NULL,
-                                 status course_progress_status_enum DEFAULT 'INCOMPLETE',
+                                 status VARCHAR(50) DEFAULT 'INCOMPLETE' CHECK (status IN ('COMPLETE', 'PARTIALLY_COMPLETE', 'INCOMPLETE')),
                                  creation TIMESTAMPTZ DEFAULT NOW(),
                                  modified TIMESTAMPTZ DEFAULT NOW(),
                                  FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -184,7 +161,7 @@ CREATE TABLE batches (
                          published BOOLEAN DEFAULT FALSE,
                          allow_self_enrollment BOOLEAN DEFAULT FALSE,
                          certification BOOLEAN DEFAULT FALSE,
-                         medium batch_medium_enum DEFAULT 'ONLINE',
+                         medium VARCHAR(50) DEFAULT 'ONLINE' CHECK (medium IN ('ONLINE', 'OFFLINE')),
                          category VARCHAR(255),
                          seat_count INTEGER,
                          evaluation_end_date DATE,
@@ -224,9 +201,6 @@ CREATE TABLE batch_enrollments (
                                    creation TIMESTAMPTZ DEFAULT NOW(),
                                    FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
                                    FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE CASCADE,
-    -- NOTE: 'payments' table needs to exist before this FK can be created.
-    -- Assuming a 'payments' table will be created later.
-    -- FOREIGN KEY (payment_id) REFERENCES payments(id),
                                    UNIQUE (member_id, batch_id)
 );
 
@@ -235,7 +209,7 @@ CREATE TABLE assignments (
                              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                              title VARCHAR(255) NOT NULL,
                              question TEXT NOT NULL,
-                             type assignment_type_enum NOT NULL,
+                             type VARCHAR(50) NOT NULL CHECK (type IN ('DOCUMENT', 'PDF', 'URL', 'IMAGE', 'TEXT')),
                              grade_assignment BOOLEAN DEFAULT TRUE,
                              show_answer BOOLEAN DEFAULT FALSE,
                              answer TEXT,
@@ -251,7 +225,7 @@ CREATE TABLE assignment_submissions (
                                         evaluator_id UUID,
                                         assignment_attachment VARCHAR(255),
                                         answer TEXT,
-                                        status assignment_status_enum DEFAULT 'NOT_GRADED',
+                                        status VARCHAR(50) DEFAULT 'NOT_GRADED' CHECK (status IN ('PASS', 'FAIL', 'NOT_GRADED', 'NOT_APPLICABLE')),
                                         comments TEXT,
                                         question TEXT,
                                         course_id UUID,
@@ -291,7 +265,7 @@ CREATE TABLE quiz_questions (
                                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                                 quiz_id UUID NOT NULL,
                                 question TEXT NOT NULL,
-                                type quiz_question_type_enum NOT NULL,
+                                type VARCHAR(50) NOT NULL CHECK (type IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TEXT', 'NUMBER')),
                                 options JSONB,
                                 correct_answer TEXT,
                                 marks INTEGER DEFAULT 1,
@@ -340,7 +314,7 @@ CREATE TABLE programming_exercise_submissions (
                                                   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                                                   exercise_id UUID NOT NULL,
                                                   member_id UUID NOT NULL,
-                                                  status programming_exercise_status_enum,
+                                                  status VARCHAR(50) CHECK (status IN ('PASSED', 'FAILED')),
                                                   code TEXT NOT NULL,
                                                   test_cases JSONB,
                                                   creation TIMESTAMPTZ DEFAULT NOW(),
@@ -374,7 +348,7 @@ CREATE TABLE certificate_requests (
                                       member_id UUID NOT NULL,
                                       course_id UUID NOT NULL,
                                       batch_id UUID,
-                                      status certificate_request_status_enum DEFAULT 'UPCOMING',
+                                      status VARCHAR(50) DEFAULT 'UPCOMING' CHECK (status IN ('UPCOMING', 'COMPLETED', 'CANCELLED')),
                                       creation TIMESTAMPTZ DEFAULT NOW(),
                                       modified TIMESTAMPTZ DEFAULT NOW(),
                                       FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -405,7 +379,6 @@ CREATE TABLE payments (
                           FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Update the foreign key in `enrollments` and `batch_enrollments` after `certificates` and `payments` tables are created.
 ALTER TABLE enrollments ADD CONSTRAINT fk_enrollments_certificate FOREIGN KEY (certificate_id) REFERENCES certificates(id);
 ALTER TABLE batch_enrollments ADD CONSTRAINT fk_batch_enrollments_payment FOREIGN KEY (payment_id) REFERENCES payments(id);
 
@@ -415,8 +388,8 @@ CREATE TABLE job_opportunities (
                                    job_title VARCHAR(255) NOT NULL,
                                    location VARCHAR(255) NOT NULL,
                                    country VARCHAR(255) NOT NULL,
-                                   type job_type_enum DEFAULT 'FULL_TIME',
-                                   status job_status_enum DEFAULT 'OPEN',
+                                   type VARCHAR(50) DEFAULT 'FULL_TIME' CHECK (type IN ('FULL_TIME', 'PART_TIME', 'FREELANCE', 'CONTRACT')),
+                                   status VARCHAR(50) DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED')),
                                    disabled BOOLEAN DEFAULT FALSE,
                                    company_name VARCHAR(255) NOT NULL,
                                    company_website VARCHAR(255) NOT NULL,
@@ -441,13 +414,10 @@ CREATE TABLE job_applications (
 );
 
 -- BẢNG THỐNG KÊ VÀ THEO DÕI
--- NOTE: The 'live_classes' table is referenced but not defined in your markdown.
--- Assuming a placeholder table for now.
 CREATE TABLE IF NOT EXISTS live_classes (
-                                            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    -- ... other columns
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     creation TIMESTAMPTZ DEFAULT NOW()
-    );
+);
 
 CREATE TABLE video_watch_duration (
                                       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -555,105 +525,24 @@ CREATE TABLE badge_assignments (
 
 
 -- 3. TRIGGERS
--- A trigger is the standard way to handle 'ON UPDATE CURRENT_TIMESTAMP' in PostgreSQL.
--- We attach this trigger to every table that has a 'modified' column.
+CREATE TRIGGER users_modified_timestamp BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER courses_modified_timestamp BEFORE UPDATE ON courses FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER chapters_modified_timestamp BEFORE UPDATE ON chapters FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER lessons_modified_timestamp BEFORE UPDATE ON lessons FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER enrollments_modified_timestamp BEFORE UPDATE ON enrollments FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER course_progress_modified_timestamp BEFORE UPDATE ON course_progress FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER batches_modified_timestamp BEFORE UPDATE ON batches FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER assignments_modified_timestamp BEFORE UPDATE ON assignments FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER assignment_submissions_modified_timestamp BEFORE UPDATE ON assignment_submissions FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER quizzes_modified_timestamp BEFORE UPDATE ON quizzes FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER programming_exercises_modified_timestamp BEFORE UPDATE ON programming_exercises FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER programming_exercise_submissions_modified_timestamp BEFORE UPDATE ON programming_exercise_submissions FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER certificates_modified_timestamp BEFORE UPDATE ON certificates FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER certificate_requests_modified_timestamp BEFORE UPDATE ON certificate_requests FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER payments_modified_timestamp BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER job_opportunities_modified_timestamp BEFORE UPDATE ON job_opportunities FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER job_applications_modified_timestamp BEFORE UPDATE ON job_applications FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER lms_settings_modified_timestamp BEFORE UPDATE ON lms_settings FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER categories_modified_timestamp BEFORE UPDATE ON categories FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER badges_modified_timestamp BEFORE UPDATE ON badges FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE TRIGGER users_modified_timestamp
-    BEFORE UPDATE ON users
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER courses_modified_timestamp
-    BEFORE UPDATE ON courses
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER chapters_modified_timestamp
-    BEFORE UPDATE ON chapters
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER lessons_modified_timestamp
-    BEFORE UPDATE ON lessons
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER enrollments_modified_timestamp
-    BEFORE UPDATE ON enrollments
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER course_progress_modified_timestamp
-    BEFORE UPDATE ON course_progress
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER batches_modified_timestamp
-    BEFORE UPDATE ON batches
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER assignments_modified_timestamp
-    BEFORE UPDATE ON assignments
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER assignment_submissions_modified_timestamp
-    BEFORE UPDATE ON assignment_submissions
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER quizzes_modified_timestamp
-    BEFORE UPDATE ON quizzes
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER programming_exercises_modified_timestamp
-    BEFORE UPDATE ON programming_exercises
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER programming_exercise_submissions_modified_timestamp
-    BEFORE UPDATE ON programming_exercise_submissions
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER certificates_modified_timestamp
-    BEFORE UPDATE ON certificates
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER certificate_requests_modified_timestamp
-    BEFORE UPDATE ON certificate_requests
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER payments_modified_timestamp
-    BEFORE UPDATE ON payments
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER job_opportunities_modified_timestamp
-    BEFORE UPDATE ON job_opportunities
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER job_applications_modified_timestamp
-    BEFORE UPDATE ON job_applications
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER lms_settings_modified_timestamp
-    BEFORE UPDATE ON lms_settings
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER categories_modified_timestamp
-    BEFORE UPDATE ON categories
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER badges_modified_timestamp
-    BEFORE UPDATE ON badges
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();

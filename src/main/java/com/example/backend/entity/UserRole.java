@@ -16,9 +16,9 @@ import java.util.UUID;
         @UniqueConstraint(columnNames = {"user_id", "role"})
 })
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UserRole {
 
     @Id
