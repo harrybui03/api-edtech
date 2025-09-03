@@ -4,7 +4,9 @@ import com.example.backend.excecption.api.Status;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
+@EqualsAndHashCode(callSuper = true)
 @Data
 @AllArgsConstructor
 public class DataNotFoundException extends EntityNotFoundException {

@@ -7,12 +7,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Entity
 @Table(name = "users")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
@@ -55,6 +55,7 @@ public class User {
     @Column(name = "modified_by")
     private UUID modifiedBy;
 
-    @OneToMany(mappedBy = "user")
-    private Set<UserRole> roles;
+    @OneToMany(mappedBy = "user" , cascade = CascadeType.ALL ,orphanRemoval = true, fetch =  FetchType.EAGER)
+    private Set<UserRole> roles = new HashSet<>();
+
 }

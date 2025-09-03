@@ -24,7 +24,6 @@ public class ApiError {
     private String message; // A general message describing the error
     private HttpStatus httpStatus; // The HTTP status code associated with the error
     private LocalDateTime timestamp; // The time when the error occurred
-    private List<ApiErrorDetail> details; // A list of specific error details or issues
 
     /**
      * Custom builder method to set a default errorId and timestamp if not provided.
