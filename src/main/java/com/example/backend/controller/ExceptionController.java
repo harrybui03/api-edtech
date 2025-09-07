@@ -1,8 +1,6 @@
 package com.example.backend.controller;
 
-import com.example.backend.excecption.DataNotFoundException;
-import com.example.backend.excecption.InternalServerError;
-import com.example.backend.excecption.InvalidRequestDataException;
+import com.example.backend.excecption.*;
 import com.example.backend.excecption.api.ApiError;
 import com.example.backend.excecption.api.ApiErrorBuilder;
 import com.example.backend.excecption.api.Status;
@@ -20,6 +18,12 @@ public class ExceptionController {
         return ApiErrorBuilder.buildApiErrorResponse(exception, Status.NOT_FOUND);
     }
 
+    @ExceptionHandler({ResourceNotFoundException.class})
+    public ResponseEntity<ApiError> handleResourceNotFoundException(ResourceNotFoundException exception){
+        logException(exception);
+        return ApiErrorBuilder.buildApiErrorResponse(exception, Status.NOT_FOUND);
+    }
+
     @ExceptionHandler({InvalidRequestDataException.class})
     public ResponseEntity<ApiError> handleInvalidRequestDataException(InvalidRequestDataException exception){
         logException(exception);
@@ -28,6 +32,18 @@ public class ExceptionController {
 
     @ExceptionHandler({InternalServerError.class})
     public ResponseEntity<ApiError> handleInternalServerErrorException(InternalServerError exception){
+        logException(exception);
+        return ApiErrorBuilder.buildApiErrorResponse(exception, Status.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler({ForbiddenException.class})
+    public ResponseEntity<ApiError> handleForbiddenException(ForbiddenException exception) {
+        logException(exception);
+        return ApiErrorBuilder.buildApiErrorResponse(exception, Status.FORBIDDEN);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiError> handleGenericException(Exception exception) {
         logException(exception);
         return ApiErrorBuilder.buildApiErrorResponse(exception, Status.INTERNAL_SERVER_ERROR);
     }

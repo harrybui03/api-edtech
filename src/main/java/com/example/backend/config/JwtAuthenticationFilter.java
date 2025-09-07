@@ -1,6 +1,7 @@
 package com.example.backend.config;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,34 +41,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        final String jwt = authHeader.substring(7);
+        try {
+            final String jwt = authHeader.substring(7);
 
-        if (SecurityContextHolder.getContext().getAuthentication() == null) {
-             try {
-                Claims claims = jwtTokenProvider.getClaims(jwt);
-                String email = claims.getSubject();
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                    Claims claims = jwtTokenProvider.getClaims(jwt);
+                    String email = claims.getSubject();
 
-                @SuppressWarnings("unchecked")
-                List<String> roles = claims.get("roles", List.class);
-                if (roles == null) {
-                    roles = Collections.emptyList();
-                }
+                    @SuppressWarnings("unchecked")
+                    List<String> roles = claims.get("roles", List.class);
+                    if (roles == null) {
+                        roles = Collections.emptyList();
+                    }
 
-                List<SimpleGrantedAuthority> authorities = roles.stream()
-                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                        .collect(Collectors.toList());
+                    List<SimpleGrantedAuthority> authorities = roles.stream()
+                            .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                            .collect(Collectors.toList());
 
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        email,
-                        null,
-                        authorities
-                );
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            email,
+                            null,
+                            authorities
+                    );
 
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-            } catch (Exception e) {
-                log.error("Cannot set user authentication: {}", e.getMessage());
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
             }
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new BadCredentialsException(e.getMessage(), e);
         }
         filterChain.doFilter(request, response);
     }
