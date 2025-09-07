@@ -1,20 +1,23 @@
 package com.example.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "course_instructors", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"course_id", "instructor_id"})
 })
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
+@Getter
+@Setter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CourseInstructor {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -26,10 +29,5 @@ public class CourseInstructor {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id", nullable = false)
-    private User instructor;
-
-    @CreationTimestamp
-    @Column(nullable = false, updatable = false)
-    private OffsetDateTime creation;
+    private User user;
 }
-

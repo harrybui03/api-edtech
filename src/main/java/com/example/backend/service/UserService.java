@@ -53,9 +53,7 @@ public class UserService {
     public PaginationResponse<UserDTO> getUsers(int page, int size){
         Pageable pageable = PageRequest.of(page, size);
         Page<User> userPage = userRepository.findAll(pageable);
-        List<UserDTO> userDTOs = userPage.getContent().stream()
-                .map(userMapper::toUserDTO)
-                .collect(Collectors.toList());
-        return new PaginationResponse<>(userDTOs, userPage.getTotalPages(), (int) userPage.getTotalElements(), userPage.getNumber(), userPage.getSize());
+        Page<UserDTO> userDtoPage = userPage.map(userMapper::toUserDTO);
+        return new PaginationResponse<>(userDtoPage);
     }
 }
