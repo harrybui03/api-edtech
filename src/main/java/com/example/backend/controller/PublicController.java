@@ -17,14 +17,14 @@ import java.util.UUID;
 public class PublicController {
     private final CourseService courseService;
 
-    @GetMapping("/courses")
-    public ResponseEntity<PaginationResponse<CourseDto>> getPublishedCourses(
-            Pageable pageable,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String search) {
-        Page<CourseDto> courses = courseService.getPublishedCourses(pageable, category, search);
-        return ResponseEntity.ok(new PaginationResponse<>(courses));
-    }
+//    @GetMapping("/courses")
+//    public ResponseEntity<PaginationResponse<CourseDto>> getPublishedCourses(
+//            Pageable pageable,
+//            @RequestParam(required = false) String category,
+//            @RequestParam(required = false) String search) {
+//        Page<CourseDto> courses = courseService.getPublishedCourses(pageable, category, search);
+//        return ResponseEntity.ok(new PaginationResponse<>(courses));
+//    }
 
     @GetMapping("/courses/{courseId}")
     public ResponseEntity<CourseDto> getCourseDetails(@PathVariable UUID courseId) {

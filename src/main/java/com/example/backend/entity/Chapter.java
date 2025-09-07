@@ -23,28 +23,15 @@ public class Chapter {
     @Column(nullable = false)
     private String title;
 
+    @Column(nullable = false)
+    private String summary;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 
     @OneToMany(mappedBy = "chapter")
     private Set<Lesson> lessons;
-
-    // ... other fields like is_scorm_package, etc.
-    @Column(name = "is_scorm_package")
-    private Boolean isScormPackage;
-
-    @Column(name = "scorm_package")
-    private String scormPackage;
-
-    @Column(name = "scorm_package_path")
-    private String scormPackagePath;
-
-    @Column(name = "manifest_file")
-    private String manifestFile;
-
-    @Column(name = "launch_file")
-    private String launchFile;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

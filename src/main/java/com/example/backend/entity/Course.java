@@ -27,6 +27,9 @@ public class Course {
     @Column(nullable = false)
     private String title;
 
+    @Column(unique = true)
+    private String slug;
+
     @Column(name = "short_introduction", columnDefinition = "TEXT")
     private String shortIntroduction;
 
@@ -38,14 +41,8 @@ public class Course {
     @Column(name = "video_link", length = 500)
     private String videoLink;
 
-    @Column(length = 500)
-    private String tags;
-
-    @Column
-    private String category;
-
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "course_status_enum default 'IN_PROGRESS'")
+    @Column(columnDefinition = "course_status_enum default 'DRAFT'")
     private CourseStatus status;
 
     @Column
@@ -54,20 +51,14 @@ public class Course {
     @Column(name = "published_on")
     private LocalDate publishedOn;
 
-    @Column
-    private Boolean upcoming;
-
-    @Column
-    private Boolean featured;
-
-    @Column(name = "disable_self_learning")
-    private Boolean disableSelfLearning;
-
     @Column(name = "paid_course")
     private Boolean paidCourse;
 
     @Column(name = "course_price")
     private BigDecimal coursePrice;
+
+    @Column(name = "selling_price")
+    private BigDecimal sellingPrice;
 
     @Column
     private String currency;
@@ -77,9 +68,6 @@ public class Course {
 
     @Column(name = "enable_certification")
     private Boolean enableCertification;
-
-    @Column(name = "paid_certificate")
-    private Boolean paidCertificate;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "evaluator")
@@ -93,6 +81,9 @@ public class Course {
 
     @Column
     private BigDecimal rating;
+
+    @Column
+    private String language;
 
     @CreationTimestamp
     @Column(name = "creation", nullable = false, updatable = false)

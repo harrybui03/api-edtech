@@ -32,18 +32,18 @@ public class CourseService {
     private final UserRepository userRepository;
     private final CourseInstructorRepository courseInstructorRepository;
 
-    @Transactional(readOnly = true)
-    public Page<CourseDto> getPublishedCourses(Pageable pageable, String category, String search) {
-        return courseRepository.findPublishedCourses(category, search, pageable)
-                .map(CourseMapper::toDto);
-    }
+//    @Transactional(readOnly = true)
+//    public Page<CourseDto> getPublishedCourses(Pageable pageable, String category, String search) {
+//        return courseRepository.findPublishedCourses(category, search, pageable)
+//                .map(CourseMapper::toDto);
+//    }
 
-    @Transactional(readOnly = true)
-    public Page<CourseDto> getMyCourses(Pageable pageable, CourseStatus status) {
-        User currentUser = getCurrentUser();
-        return courseRepository.findCoursesByInstructorAndStatus(currentUser.getId(), status, pageable)
-                .map(CourseMapper::toDto);
-    }
+//    @Transactional(readOnly = true)
+//    public Page<CourseDto> getMyCourses(Pageable pageable, CourseStatus status) {
+//        User currentUser = getCurrentUser();
+//        return courseRepository.findCoursesByInstructorAndStatus(currentUser.getId(), status, pageable)
+//                .map(CourseMapper::toDto);
+//    }
 
     @Transactional(readOnly = true)
     public CourseDto getCourseDetails(UUID courseId) {

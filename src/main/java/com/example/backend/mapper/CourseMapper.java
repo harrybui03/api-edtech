@@ -17,7 +17,6 @@ public final class CourseMapper {
         dto.setShortIntroduction(course.getShortIntroduction());
         dto.setDescription(course.getDescription());
         dto.setImage(course.getImage());
-        dto.setCategory(course.getCategory());
         dto.setStatus(course.getStatus());
         dto.setPublished(course.getPublished());
         dto.setPublishedOn(course.getPublishedOn());
@@ -36,7 +35,6 @@ public final class CourseMapper {
                 .title(request.getTitle())
                 .shortIntroduction(request.getShortIntroduction())
                 .description(request.getDescription())
-                .category(request.getCategory())
                 .coursePrice(request.getCoursePrice())
                 .build();
     }
@@ -48,7 +46,6 @@ public final class CourseMapper {
         course.setTitle(request.getTitle());
         course.setShortIntroduction(request.getShortIntroduction());
         course.setDescription(request.getDescription());
-        course.setCategory(request.getCategory());
         course.setCoursePrice(request.getCoursePrice());
     }
 }
