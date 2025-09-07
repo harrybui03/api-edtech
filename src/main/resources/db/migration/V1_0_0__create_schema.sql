@@ -524,25 +524,3 @@ CREATE TABLE badge_assignments (
 );
 
 
--- 3. TRIGGERS
-CREATE TRIGGER users_modified_timestamp BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER courses_modified_timestamp BEFORE UPDATE ON courses FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER chapters_modified_timestamp BEFORE UPDATE ON chapters FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER lessons_modified_timestamp BEFORE UPDATE ON lessons FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER enrollments_modified_timestamp BEFORE UPDATE ON enrollments FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER course_progress_modified_timestamp BEFORE UPDATE ON course_progress FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER batches_modified_timestamp BEFORE UPDATE ON batches FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER assignments_modified_timestamp BEFORE UPDATE ON assignments FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER assignment_submissions_modified_timestamp BEFORE UPDATE ON assignment_submissions FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER quizzes_modified_timestamp BEFORE UPDATE ON quizzes FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER programming_exercises_modified_timestamp BEFORE UPDATE ON programming_exercises FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER programming_exercise_submissions_modified_timestamp BEFORE UPDATE ON programming_exercise_submissions FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER certificates_modified_timestamp BEFORE UPDATE ON certificates FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER certificate_requests_modified_timestamp BEFORE UPDATE ON certificate_requests FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER payments_modified_timestamp BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER job_opportunities_modified_timestamp BEFORE UPDATE ON job_opportunities FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER job_applications_modified_timestamp BEFORE UPDATE ON job_applications FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER lms_settings_modified_timestamp BEFORE UPDATE ON lms_settings FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER categories_modified_timestamp BEFORE UPDATE ON categories FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER badges_modified_timestamp BEFORE UPDATE ON badges FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-

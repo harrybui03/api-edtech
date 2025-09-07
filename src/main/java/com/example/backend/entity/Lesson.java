@@ -22,6 +22,9 @@ public class Lesson {
     @Column(nullable = false)
     private String title;
 
+    @Column(unique = true)
+    private String slug;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "chapter_id", nullable = false)
     private Chapter chapter;
@@ -40,6 +43,8 @@ public class Lesson {
     private String fileUrl;
 
     private Integer duration;
+
+    private Integer position;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
