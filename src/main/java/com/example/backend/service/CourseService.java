@@ -1,28 +1,34 @@
 package com.example.backend.service;
 
 import com.example.backend.constant.CourseStatus;
+import com.example.backend.constant.EntityType;
 import com.example.backend.constant.UserRoleEnum;
 import com.example.backend.dto.model.CourseDto;
+import com.example.backend.dto.model.LabelDto;
+import com.example.backend.dto.model.TagDto;
 import com.example.backend.dto.request.course.CourseRequest;
-import com.example.backend.entity.Course;
-import com.example.backend.entity.CourseInstructor;
-import com.example.backend.entity.User;
+import com.example.backend.entity.*;
 import com.example.backend.excecption.ForbiddenException;
 import com.example.backend.excecption.InvalidRequestDataException;
 import com.example.backend.excecption.ResourceNotFoundException;
 import com.example.backend.mapper.CourseMapper;
-import com.example.backend.repository.CourseRepository;
-import com.example.backend.repository.CourseInstructorRepository;
-import com.example.backend.repository.UserRepository;
+import com.example.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.text.Normalizer;
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,25 +37,41 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final CourseInstructorRepository courseInstructorRepository;
+    private final TagRepository tagRepository;
+    private final LabelRepository labelRepository;
 
-//    @Transactional(readOnly = true)
-//    public Page<CourseDto> getPublishedCourses(Pageable pageable, String category, String search) {
-//        return courseRepository.findPublishedCourses(category, search, pageable)
-//                .map(CourseMapper::toDto);
-//    }
-
-//    @Transactional(readOnly = true)
-//    public Page<CourseDto> getMyCourses(Pageable pageable, CourseStatus status) {
-//        User currentUser = getCurrentUser();
-//        return courseRepository.findCoursesByInstructorAndStatus(currentUser.getId(), status, pageable)
-//                .map(CourseMapper::toDto);
-//    }
+    private static final Pattern NON_LATIN = Pattern.compile("[^\\w-]");
+    private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
 
     @Transactional(readOnly = true)
-    public CourseDto getCourseDetails(UUID courseId) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
-        return CourseMapper.toDto(course);
+    public Page<CourseDto> getPublishedCourses(Pageable pageable, List<String> tags, List<String> labels, String search) {
+        // Start with your first, non-nullable Specification.
+        Specification<Course> spec = CourseSpecification.isPublished();
+
+        // Chain the rest using the .and() instance method.
+        // The .and() method is null-safe, so if a spec method returns null, it's ignored.
+        spec = spec.and(CourseSpecification.titleContains(search))
+                .and(CourseSpecification.hasLabels(labels))
+                .and(CourseSpecification.hasTags(tags));
+
+        Page<Course> coursePage = courseRepository.findAll(spec, pageable);
+        return getCourseDtos(coursePage);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CourseDto> getMyCourses(Pageable pageable, CourseStatus status) {
+        User currentUser = getCurrentUser();
+        Page<Course> coursePage = courseRepository.findCoursesByInstructorAndStatus(currentUser.getId(), status, pageable);
+        return getCourseDtos(coursePage);
+    }
+
+    @Transactional(readOnly = true)
+    public CourseDto getCourseBySlug(String slug) {
+        Course course = courseRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with slug: " + slug));
+        List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+        List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+        return CourseMapper.toDto(course, tags, labels);
     }
 
     @Transactional
@@ -59,6 +81,7 @@ public class CourseService {
         Course course = CourseMapper.toEntity(request);
         course.setStatus(CourseStatus.DRAFT);
         course.setPublished(false);
+        course.setSlug(generateUniqueSlug(request.getTitle()));
 
         Course savedCourse = courseRepository.save(course);
 
@@ -67,32 +90,85 @@ public class CourseService {
         courseInstructor.setUser(currentUser);
         courseInstructorRepository.save(courseInstructor);
 
-        return CourseMapper.toDto(savedCourse);
+        List<Tag> tags = upsertTags(request.getTagDto().stream().map(TagDto::getName).collect(Collectors.toList()), savedCourse.getId());
+        List<Label> labels = upsertLabels(request.getLabelDto().stream().map(LabelDto::getName).collect(Collectors.toList()), savedCourse.getId());
+
+        return CourseMapper.toDto(savedCourse, tags, labels);
     }
 
     @Transactional
     public CourseDto updateCourse(UUID courseId, CourseRequest request) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
-
+        Course course = findCourseById(courseId);
         checkCourseOwnership(course);
 
         CourseMapper.updateEntityFromRequest(request, course);
 
+        if (!course.getTitle().equals(request.getTitle())) {
+            course.setSlug(generateUniqueSlug(request.getTitle()));
+        }
+
+        tagRepository.deleteByEntityIdAndEntityType(courseId, EntityType.COURSE);
+        labelRepository.deleteByEntityIdAndEntityType(courseId, EntityType.COURSE);
+
+        List<Tag> tags = upsertTags(request.getTagDto().stream().map(TagDto::getName).collect(Collectors.toList()), courseId);
+        List<Label> labels = upsertLabels(request.getLabelDto().stream().map(LabelDto::getName).collect(Collectors.toList()), courseId);
+
         Course updatedCourse = courseRepository.save(course);
-        return CourseMapper.toDto(updatedCourse);
+        return CourseMapper.toDto(updatedCourse, tags, labels);
+    }
+
+    private String generateUniqueSlug(String title) {
+        String baseSlug = toSlug(title);
+        String slug = baseSlug;
+        int counter = 1;
+        while (courseRepository.existsBySlug(slug)) {
+            slug = baseSlug + "-" + counter;
+            counter++;
+        }
+        return slug;
+    }
+
+    private String toSlug(String input) {
+        String whitespace = WHITESPACE.matcher(input).replaceAll("-");
+        String normalized = Normalizer.normalize(whitespace, Normalizer.Form.NFD);
+        String slug = NON_LATIN.matcher(normalized).replaceAll("");
+        return slug.toLowerCase(Locale.ENGLISH);
+    }
+
+    private List<Tag> upsertTags(List<String> tagNames, UUID courseId) {
+        if (tagNames == null || tagNames.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Tag> tags = tagNames.stream().map(name -> Tag.builder()
+                .name(name)
+                .entityId(courseId)
+                .entityType(EntityType.COURSE)
+                .build()).collect(Collectors.toList());
+        return tagRepository.saveAll(tags);
+    }
+
+    private List<Label> upsertLabels(List<String> labelNames, UUID courseId) {
+        if (labelNames == null || labelNames.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Label> labels = labelNames.stream().map(name -> Label.builder()
+                .name(name)
+                .entityId(courseId)
+                .entityType(EntityType.COURSE)
+                .build()).collect(Collectors.toList());
+        return labelRepository.saveAll(labels);
     }
 
     @Transactional
     public void deleteCourse(UUID courseId) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
-
+        Course course = findCourseById(courseId);
         checkCourseOwnership(course);
-        if (course.getPublished()){
+        if (course.getPublished()) {
             throw new ForbiddenException("Cannot delete a published course.");
         }
 
+        tagRepository.deleteByEntityIdAndEntityType(courseId, EntityType.COURSE);
+        labelRepository.deleteByEntityIdAndEntityType(courseId, EntityType.COURSE);
         courseRepository.delete(course);
     }
 
@@ -176,5 +252,13 @@ public class CourseService {
     private Course findCourseById(UUID courseId) {
         return courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
+    }
+
+    private Page<CourseDto> getCourseDtos(Page<Course> coursePage) {
+        return coursePage.map(course -> {
+            List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+            List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+            return CourseMapper.toDto(course, tags, labels);
+        });
     }
 }

@@ -9,7 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/public")
@@ -17,17 +17,18 @@ import java.util.UUID;
 public class PublicController {
     private final CourseService courseService;
 
-//    @GetMapping("/courses")
-//    public ResponseEntity<PaginationResponse<CourseDto>> getPublishedCourses(
-//            Pageable pageable,
-//            @RequestParam(required = false) String category,
-//            @RequestParam(required = false) String search) {
-//        Page<CourseDto> courses = courseService.getPublishedCourses(pageable, category, search);
-//        return ResponseEntity.ok(new PaginationResponse<>(courses));
-//    }
+    @GetMapping("/courses")
+    public ResponseEntity<PaginationResponse<CourseDto>> getPublishedCourses(
+            Pageable pageable,
+            @RequestParam(required = false) List<String> tags,
+            @RequestParam(required = false) List<String> labels,
+            @RequestParam(required = false) String search) {
+        Page<CourseDto> courses = courseService.getPublishedCourses(pageable, tags, labels, search);
+        return ResponseEntity.ok(new PaginationResponse<>(courses));
+    }
 
-    @GetMapping("/courses/{courseId}")
-    public ResponseEntity<CourseDto> getCourseDetails(@PathVariable UUID courseId) {
-        return ResponseEntity.ok(courseService.getCourseDetails(courseId));
+    @GetMapping("/courses/{slug}")
+    public ResponseEntity<CourseDto> getCourseDetails(@PathVariable String slug) {
+        return ResponseEntity.ok(courseService.getCourseBySlug(slug));
     }
 }
