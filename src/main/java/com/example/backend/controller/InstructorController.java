@@ -38,11 +38,11 @@ public class InstructorController {
         return ResponseEntity.noContent().build();
     }
 
-//    @GetMapping("/my-courses")
-//    public ResponseEntity<PaginationResponse<CourseDto>> getMyCourses(Pageable pageable, @RequestParam(required = false) CourseStatus status) {
-//        Page<CourseDto> courses = courseService.getMyCourses(pageable, status);
-//        return ResponseEntity.ok(new PaginationResponse<>(courses));
-//    }
+    @GetMapping("/my-courses")
+    public ResponseEntity<PaginationResponse<CourseDto>> getMyCourses(Pageable pageable, @RequestParam(required = false) CourseStatus status) {
+        Page<CourseDto> courses = courseService.getMyCourses(pageable, status);
+        return ResponseEntity.ok(new PaginationResponse<>(courses));
+    }
 
     @PutMapping("/courses/{courseId}/publish")
     public ResponseEntity<Void> publishCourse(@PathVariable UUID courseId) {
