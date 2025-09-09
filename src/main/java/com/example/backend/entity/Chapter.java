@@ -30,7 +30,10 @@ public class Chapter {
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 
-    @OneToMany(mappedBy = "chapter")
+    @Column
+    private Integer position;
+
+    @OneToMany(mappedBy = "chapter", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Lesson> lessons;
 
     @CreationTimestamp

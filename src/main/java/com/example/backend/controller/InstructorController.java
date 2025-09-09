@@ -1,11 +1,17 @@
 package com.example.backend.controller;
 
 import com.example.backend.constant.CourseStatus;
+import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.model.CourseDto;
+import com.example.backend.dto.model.LessonDto;
+import com.example.backend.dto.request.course.ChapterRequest;
 import com.example.backend.dto.request.course.CourseRequest;
+import com.example.backend.dto.request.course.LessonRequest;
 import com.example.backend.dto.request.instructor.InstructorIdRequest;
 import com.example.backend.dto.response.pagination.PaginationResponse;
+import com.example.backend.service.ChapterService;
 import com.example.backend.service.CourseService;
+import com.example.backend.service.LessonService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +27,8 @@ import java.util.UUID;
 public class InstructorController {
 
     private final CourseService courseService;
+    private final ChapterService chapterService;
+    private final LessonService lessonService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -60,6 +68,38 @@ public class InstructorController {
     @DeleteMapping("/courses/{courseId}/instructors/{instructorId}")
     public ResponseEntity<Void> removeInstructorFromCourse(@PathVariable UUID courseId, @PathVariable UUID instructorId) {
         courseService.removeInstructorFromCourse(courseId, instructorId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/courses/{courseId}/chapters")
+    public ResponseEntity<ChapterDto> createChapter(@PathVariable UUID courseId, @RequestBody ChapterRequest request) {
+        return new ResponseEntity<>(chapterService.createChapter(courseId, request), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/chapters/{chapterId}")
+    public ResponseEntity<ChapterDto> updateChapter(@PathVariable UUID chapterId, @RequestBody ChapterRequest request) {
+        return ResponseEntity.ok(chapterService.updateChapter(chapterId, request));
+    }
+
+    @DeleteMapping("/chapters/{chapterId}")
+    public ResponseEntity<Void> deleteChapter(@PathVariable UUID chapterId) {
+        chapterService.deleteChapter(chapterId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/chapters/{chapterId}/lessons")
+    public ResponseEntity<LessonDto> createLesson(@PathVariable UUID chapterId, @RequestBody LessonRequest request) {
+        return new ResponseEntity<>(lessonService.createLesson(chapterId, request), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/lessons/{lessonId}")
+    public ResponseEntity<LessonDto> updateLesson(@PathVariable UUID lessonId, @RequestBody LessonRequest request) {
+        return ResponseEntity.ok(lessonService.updateLesson(lessonId, request));
+    }
+
+    @DeleteMapping("/lessons/{lessonId}")
+    public ResponseEntity<Void> deleteLesson(@PathVariable UUID lessonId) {
+        lessonService.deleteLesson(lessonId);
         return ResponseEntity.noContent().build();
     }
 }
