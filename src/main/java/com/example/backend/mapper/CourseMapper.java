@@ -7,14 +7,22 @@ import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.entity.Course;
 import com.example.backend.entity.Label;
 import com.example.backend.entity.Tag;
+import com.example.backend.service.FileUploadService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public final class CourseMapper {
+@Component
+@RequiredArgsConstructor
+public class CourseMapper {
 
-    public static CourseDto toDto(Course course, List<Tag> tags, List<Label> labels) {
+    private final FileUploadService fileUploadService;
+
+    public  CourseDto toDto(Course course, List<Tag> tags, List<Label> labels) {
         if (course == null) {
             return null;
         }
@@ -24,7 +32,11 @@ public final class CourseMapper {
         dto.setSlug(course.getSlug());
         dto.setShortIntroduction(course.getShortIntroduction());
         dto.setDescription(course.getDescription());
-        dto.setImage(course.getImage());
+
+        if (StringUtils.hasText(course.getImage())) {
+            dto.setImage(fileUploadService.generatePresignedGetUrl(course.getImage()));
+        }
+
         dto.setVideoLink(course.getVideoLink());
         dto.setStatus(course.getStatus());
         dto.setPublished(course.getPublished());
@@ -43,11 +55,11 @@ public final class CourseMapper {
         return dto;
     }
 
-    public static CourseDto toDto(Course course) {
+    public CourseDto toDto(Course course) {
         return toDto(course, Collections.emptyList(), Collections.emptyList());
     }
 
-    private static List<TagDto> toTagDtoList(List<Tag> tags) {
+    private List<TagDto> toTagDtoList(List<Tag> tags) {
         if (tags == null || tags.isEmpty()) {
             return Collections.emptyList();
         }
@@ -56,7 +68,7 @@ public final class CourseMapper {
                 .collect(Collectors.toList());
     }
 
-    private static List<LabelDto> toLabelDtoList(List<Label> labels) {
+    private List<LabelDto> toLabelDtoList(List<Label> labels) {
         if (labels == null || labels.isEmpty()) {
             return Collections.emptyList();
         }
@@ -73,17 +85,33 @@ public final class CourseMapper {
                 .title(request.getTitle())
                 .shortIntroduction(request.getShortIntroduction())
                 .description(request.getDescription())
+                .image(request.getImage())
+                .videoLink(request.getVideoLink())
+                .paidCourse(request.getPaidCourse())
                 .coursePrice(request.getCoursePrice())
+                .sellingPrice(request.getSellingPrice())
+                .currency(request.getCurrency())
+                .amountUsd(request.getAmountUsd())
+                .enableCertification(request.getEnableCertification())
+                .language(request.getLanguage())
                 .build();
     }
 
-    public static void updateEntityFromRequest(CourseRequest request, Course course) {
+    public void updateEntityFromRequest(CourseRequest request, Course course) {
         if (request == null || course == null) {
             return;
         }
         course.setTitle(request.getTitle());
         course.setShortIntroduction(request.getShortIntroduction());
         course.setDescription(request.getDescription());
+        course.setImage(request.getImage());
+        course.setVideoLink(request.getVideoLink());
+        course.setPaidCourse(request.getPaidCourse());
         course.setCoursePrice(request.getCoursePrice());
+        course.setSellingPrice(request.getSellingPrice());
+        course.setCurrency(request.getCurrency());
+        course.setAmountUsd(request.getAmountUsd());
+        course.setEnableCertification(request.getEnableCertification());
+        course.setLanguage(request.getLanguage());
     }
 }

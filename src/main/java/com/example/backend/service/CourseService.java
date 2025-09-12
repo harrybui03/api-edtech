@@ -39,6 +39,7 @@ public class CourseService {
     private final CourseInstructorRepository courseInstructorRepository;
     private final TagRepository tagRepository;
     private final LabelRepository labelRepository;
+    private final CourseMapper courseMapper;
 
     private static final Pattern NON_LATIN = Pattern.compile("[^\\w-]");
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
@@ -71,7 +72,7 @@ public class CourseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with slug: " + slug));
         List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
         List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
-        return CourseMapper.toDto(course, tags, labels);
+        return courseMapper.toDto(course, tags, labels);
     }
 
     @Transactional
@@ -93,7 +94,7 @@ public class CourseService {
         List<Tag> tags = upsertTags(request.getTagDto().stream().map(TagDto::getName).collect(Collectors.toList()), savedCourse.getId());
         List<Label> labels = upsertLabels(request.getLabelDto().stream().map(LabelDto::getName).collect(Collectors.toList()), savedCourse.getId());
 
-        return CourseMapper.toDto(savedCourse, tags, labels);
+        return courseMapper.toDto(savedCourse, tags, labels);
     }
 
     @Transactional
@@ -101,7 +102,7 @@ public class CourseService {
         Course course = findCourseById(courseId);
         checkCourseOwnership(course);
 
-        CourseMapper.updateEntityFromRequest(request, course);
+        courseMapper.updateEntityFromRequest(request, course);
 
         if (!course.getTitle().equals(request.getTitle())) {
             course.setSlug(generateUniqueSlug(request.getTitle()));
@@ -114,7 +115,7 @@ public class CourseService {
         List<Label> labels = upsertLabels(request.getLabelDto().stream().map(LabelDto::getName).collect(Collectors.toList()), courseId);
 
         Course updatedCourse = courseRepository.save(course);
-        return CourseMapper.toDto(updatedCourse, tags, labels);
+        return courseMapper.toDto(updatedCourse, tags, labels);
     }
 
     private String generateUniqueSlug(String title) {
@@ -258,7 +259,7 @@ public class CourseService {
         return coursePage.map(course -> {
             List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
             List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
-            return CourseMapper.toDto(course, tags, labels);
+            return courseMapper.toDto(course, tags, labels);
         });
     }
 }
