@@ -2,8 +2,10 @@ package com.example.backend.mapper;
 
 import com.example.backend.dto.model.UserDTO;
 import com.example.backend.entity.User;
+import com.example.backend.service.FileUploadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.stream.Collectors;
 
@@ -11,29 +13,24 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserMapper {
 
-    private final UserRoleMapper userRoleMapper;
+    private final FileUploadService fileUploadService;
 
     public UserDTO toUserDTO(User user) {
         if (user == null) {
             return null;
         }
-
         UserDTO userDTO = new UserDTO();
         userDTO.setId(user.getId());
         userDTO.setEmail(user.getEmail());
         userDTO.setUsername(user.getUsername());
         userDTO.setFullName(user.getFullName());
-        userDTO.setUserImage(user.getUserImage());
         userDTO.setEnabled(user.getEnabled());
         userDTO.setUserType(user.getUserType());
         userDTO.setLastActive(user.getLastActive());
 
-        if (user.getRoles() != null) {
-            userDTO.setRoles(user.getRoles().stream()
-                    .map(userRoleMapper::toUserRoleDTO)
-                    .collect(Collectors.toSet()));
+        if (StringUtils.hasText(user.getUserImage())) {
+            userDTO.setUserImage(fileUploadService.generatePresignedGetUrl(user.getUserImage()));
         }
-
         return userDTO;
     }
 }
