@@ -1,6 +1,5 @@
 package com.example.backend.controller;
 
-import com.example.backend.dto.request.progress.VideoWatchTimeRequest;
 import com.example.backend.dto.response.progress.CourseProgressResponse;
 import com.example.backend.service.ProgressTrackingService;
 import io.swagger.v3.oas.annotations.Operation;

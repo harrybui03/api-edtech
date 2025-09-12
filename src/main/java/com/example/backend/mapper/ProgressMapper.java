@@ -2,6 +2,8 @@ package com.example.backend.mapper;
 
 import com.example.backend.constant.CourseProgressStatus;
 import com.example.backend.dto.response.progress.CourseProgressResponse;
+import com.example.backend.dto.response.progress.ChapterProgressResponse;
+import com.example.backend.dto.response.progress.LessonProgressResponse;
 import com.example.backend.entity.*;
 import org.springframework.stereotype.Component;
 
@@ -22,14 +24,14 @@ public class ProgressMapper {
             int completedLessons,
             int totalLessons) {
         
-        List<CourseProgressResponse.ChapterProgressResponse> chapterResponses = chapters.stream()
+        List<ChapterProgressResponse> chapterResponses = chapters.stream()
                 .map(chapter -> {
                     List<Lesson> chapterLessons = lessonsByChapter.getOrDefault(chapter.getId(), List.of());
                     
-                    List<CourseProgressResponse.LessonProgressResponse> lessonResponses = chapterLessons.stream()
+                    List<LessonProgressResponse> lessonResponses = chapterLessons.stream()
                             .map(lesson -> {
                                 CourseProgress progress = progressMap.get(lesson.getId());
-                                return CourseProgressResponse.LessonProgressResponse.builder()
+                                return LessonProgressResponse.builder()
                                         .lessonId(lesson.getId())
                                         .lessonTitle(lesson.getTitle())
                                         .status(progress != null ? progress.getStatus() : CourseProgressStatus.INCOMPLETE)
@@ -40,7 +42,7 @@ public class ProgressMapper {
                             })
                             .collect(Collectors.toList());
                     
-                    return CourseProgressResponse.ChapterProgressResponse.builder()
+                    return ChapterProgressResponse.builder()
                             .chapterId(chapter.getId())
                             .chapterTitle(chapter.getTitle())
                             .lessons(lessonResponses)

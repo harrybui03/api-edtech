@@ -1,7 +1,6 @@
 package com.example.backend.service;
 
 import com.example.backend.constant.CourseProgressStatus;
-import com.example.backend.dto.request.progress.VideoWatchTimeRequest;
 import com.example.backend.dto.response.progress.CourseProgressResponse;
 import com.example.backend.entity.*;
 import com.example.backend.mapper.ProgressMapper;
