@@ -8,17 +8,22 @@ import com.example.backend.dto.request.course.ChapterRequest;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.dto.request.course.LessonRequest;
 import com.example.backend.dto.request.instructor.InstructorIdRequest;
+import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.service.ChapterService;
 import com.example.backend.service.CourseService;
 import com.example.backend.service.LessonService;
+import com.example.backend.service.EnrollmentService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -29,6 +34,7 @@ public class InstructorController {
     private final CourseService courseService;
     private final ChapterService chapterService;
     private final LessonService lessonService;
+    private final EnrollmentService enrollmentService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -101,5 +107,25 @@ public class InstructorController {
     public ResponseEntity<Void> deleteLesson(@PathVariable UUID lessonId) {
         lessonService.deleteLesson(lessonId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/courses/{courseId}/enrollments")
+    @Operation(summary = "Get course enrollments", description = "Instructor gets all enrollments for their course")
+    public ResponseEntity<List<EnrollmentResponse>> getCourseEnrollments(@PathVariable UUID courseId) {
+        String currentUserEmail = getCurrentUserEmail();
+        List<EnrollmentResponse> enrollments = enrollmentService.getCourseEnrollments(courseId, currentUserEmail);
+        return ResponseEntity.ok(enrollments);
+    }
+    
+    @DeleteMapping("/enrollments/{enrollmentId}")
+    @Operation(summary = "Remove enrollment", description = "Instructor removes a student from their course")
+    public ResponseEntity<Void> removeEnrollment(@PathVariable UUID enrollmentId) {
+        String currentUserEmail = getCurrentUserEmail();
+        enrollmentService.removeEnrollment(enrollmentId, currentUserEmail);
+        return ResponseEntity.noContent().build();
+    }
+    
+    private String getCurrentUserEmail() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
     }
 }
