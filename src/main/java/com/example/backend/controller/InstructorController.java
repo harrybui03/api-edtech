@@ -4,16 +4,21 @@ import com.example.backend.constant.CourseStatus;
 import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.model.CourseDto;
 import com.example.backend.dto.model.LessonDto;
+import com.example.backend.dto.model.QuizDto;
 import com.example.backend.dto.request.course.ChapterRequest;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.dto.request.course.LessonRequest;
 import com.example.backend.dto.request.instructor.InstructorIdRequest;
+import com.example.backend.dto.request.quiz.QuizRequest;
+import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
+import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
 import com.example.backend.service.ChapterService;
 import com.example.backend.service.CourseService;
 import com.example.backend.service.LessonService;
 import com.example.backend.service.EnrollmentService;
+import com.example.backend.service.QuizService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,6 +40,7 @@ public class InstructorController {
     private final ChapterService chapterService;
     private final LessonService lessonService;
     private final EnrollmentService enrollmentService;
+    private final QuizService quizService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -125,6 +131,55 @@ public class InstructorController {
         return ResponseEntity.noContent().build();
     }
     
+    // Quiz Management APIs
+    @PostMapping("/quizzes")
+    @Operation(summary = "Create a new quiz", description = "Instructor creates a new quiz for a course")
+    public ResponseEntity<QuizDto> createQuiz(@RequestBody QuizRequest request) {
+        String currentUserEmail = getCurrentUserEmail();
+        QuizDto quiz = quizService.createQuiz(request, currentUserEmail);
+        return ResponseEntity.status(HttpStatus.CREATED).body(quiz);
+    }
+
+    @PutMapping("/quizzes/{quizId}")
+    @Operation(summary = "Update quiz", description = "Instructor updates an existing quiz")
+    public ResponseEntity<QuizDto> updateQuiz(@PathVariable UUID quizId, @RequestBody QuizRequest request) {
+        String currentUserEmail = getCurrentUserEmail();
+        QuizDto quiz = quizService.updateQuiz(quizId, request, currentUserEmail);
+        return ResponseEntity.ok(quiz);
+    }
+
+    @DeleteMapping("/quizzes/{quizId}")
+    @Operation(summary = "Delete quiz", description = "Instructor deletes a quiz")
+    public ResponseEntity<Void> deleteQuiz(@PathVariable UUID quizId) {
+        String currentUserEmail = getCurrentUserEmail();
+        quizService.deleteQuiz(quizId, currentUserEmail);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/quizzes/{quizId}/questions")
+    @Operation(summary = "Add question to quiz", description = "Instructor adds a question to a quiz")
+    public ResponseEntity<QuizDto> addQuestionToQuiz(@PathVariable UUID quizId, @RequestBody QuizQuestionRequest request) {
+        String currentUserEmail = getCurrentUserEmail();
+        QuizDto quiz = quizService.addQuestionToQuiz(quizId, request, currentUserEmail);
+        return ResponseEntity.status(HttpStatus.CREATED).body(quiz);
+    }
+
+    @PutMapping("/questions/{questionId}")
+    @Operation(summary = "Update question", description = "Instructor updates a quiz question")
+    public ResponseEntity<Void> updateQuestion(@PathVariable UUID questionId, @RequestBody QuizQuestionRequest request) {
+        String currentUserEmail = getCurrentUserEmail();
+        quizService.updateQuestion(questionId, request, currentUserEmail);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/courses/{courseId}/quiz-submissions")
+    @Operation(summary = "Get quiz submissions for course", description = "Instructor gets all quiz submissions for their course")
+    public ResponseEntity<List<QuizSubmissionResponse>> getCourseQuizSubmissions(@PathVariable UUID courseId) {
+        String currentUserEmail = getCurrentUserEmail();
+        List<QuizSubmissionResponse> submissions = quizService.getCourseQuizSubmissions(courseId, currentUserEmail);
+        return ResponseEntity.ok(submissions);
+    }
+
     private String getCurrentUserEmail() {
         return SecurityContextHolder.getContext().getAuthentication().getName();
     }
