@@ -25,7 +25,7 @@ public class QuizQuestion {
     private String question;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "quiz_question_type_enum")
+    @Column(nullable = false)
     private QuizQuestionType type;
 
     // NOTE: For JSONB, mapping to String is simplest.
