@@ -13,6 +13,8 @@ public class QuizRequest {
     @NotBlank(message = "Quiz title is required")
     private String title;
     
+    private String explanation;
+    
     private UUID lessonId;
     
     @NotNull(message = "Course ID is required")
