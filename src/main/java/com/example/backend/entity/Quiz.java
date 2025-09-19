@@ -20,6 +20,9 @@ public class Quiz {
     @Column(unique = true, nullable = false)
     private String title;
 
+    @Column(columnDefinition = "TEXT")
+    private String explanation;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;

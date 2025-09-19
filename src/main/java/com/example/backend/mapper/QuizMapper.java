@@ -20,6 +20,7 @@ public final class QuizMapper {
         QuizDto dto = new QuizDto();
         dto.setId(quiz.getId());
         dto.setTitle(quiz.getTitle());
+        dto.setExplanation(quiz.getExplanation());
         dto.setLessonId(quiz.getLesson() != null ? quiz.getLesson().getId() : null);
         dto.setCourseId(quiz.getCourse() != null ? quiz.getCourse().getId() : null);
         dto.setMaxAttempts(quiz.getMaxAttempts());
@@ -44,6 +45,7 @@ public final class QuizMapper {
         QuizResponse response = new QuizResponse();
         response.setId(quiz.getId());
         response.setTitle(quiz.getTitle());
+        response.setExplanation(quiz.getExplanation());
         response.setLessonId(quiz.getLesson() != null ? quiz.getLesson().getId() : null);
         response.setCourseId(quiz.getCourse() != null ? quiz.getCourse().getId() : null);
         response.setMaxAttempts(quiz.getMaxAttempts());
@@ -69,6 +71,7 @@ public final class QuizMapper {
         }
         Quiz quiz = new Quiz();
         quiz.setTitle(request.getTitle());
+        quiz.setExplanation(request.getExplanation());
         quiz.setMaxAttempts(request.getMaxAttempts());
         quiz.setShowAnswers(request.getShowAnswers());
         quiz.setShowSubmissionHistory(request.getShowSubmissionHistory());
@@ -86,6 +89,7 @@ public final class QuizMapper {
             return;
         }
         quiz.setTitle(request.getTitle());
+        quiz.setExplanation(request.getExplanation());
         quiz.setMaxAttempts(request.getMaxAttempts());
         quiz.setShowAnswers(request.getShowAnswers());
         quiz.setShowSubmissionHistory(request.getShowSubmissionHistory());

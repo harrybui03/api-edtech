@@ -10,6 +10,7 @@ import java.util.UUID;
 public class QuizDto {
     private UUID id;
     private String title;
+    private String explanation;
     private UUID lessonId;
     private UUID courseId;
     private Integer maxAttempts;
