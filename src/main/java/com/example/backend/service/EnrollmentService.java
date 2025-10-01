@@ -12,6 +12,7 @@ import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +32,8 @@ public class EnrollmentService {
     private final UserRepository userRepository;
     private final EnrollmentMapper enrollmentMapper;
     
-    public EnrollmentResponse enrollInCourse(String studentEmail, UUID courseId) {
+    public EnrollmentResponse enrollInCourse(UUID courseId) {
+        String studentEmail = getCurrentUserEmail();
         log.info("Enrolling student {} in course {}", studentEmail, courseId);
         
         // Validate user and course existence
@@ -72,7 +74,8 @@ public class EnrollmentService {
     }
     
     @Transactional(readOnly = true)
-    public List<EnrollmentResponse> getMyEnrollments(String studentEmail) {
+    public List<EnrollmentResponse> getMyEnrollments() {
+        String studentEmail = getCurrentUserEmail();
         log.info("Getting enrollments for student {}", studentEmail);
         
         User student = userRepository.findByEmail(studentEmail)
@@ -86,7 +89,8 @@ public class EnrollmentService {
     }
     
     @Transactional(readOnly = true)
-    public List<EnrollmentResponse> getCourseEnrollments(UUID courseId, String instructorEmail) {
+    public List<EnrollmentResponse> getCourseEnrollments(UUID courseId) {
+        String instructorEmail = getCurrentUserEmail();
         log.info("Getting enrollments for course {} by instructor {}", courseId, instructorEmail);
         
         User instructor = userRepository.findByEmail(instructorEmail)
@@ -110,7 +114,8 @@ public class EnrollmentService {
                 .collect(Collectors.toList());
     }
     
-    public void removeEnrollment(UUID enrollmentId, String instructorEmail) {
+    public void removeEnrollment(UUID enrollmentId) {
+        String instructorEmail = getCurrentUserEmail();
         log.info("Removing enrollment {} by instructor {}", enrollmentId, instructorEmail);
         
         User instructor = userRepository.findByEmail(instructorEmail)
@@ -142,4 +147,7 @@ public class EnrollmentService {
         return enrollmentRepository.existsByMemberIdAndCourseId(studentId, courseId);
     }
     
+    private String getCurrentUserEmail() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
+    }
 }

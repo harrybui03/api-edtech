@@ -31,7 +31,7 @@ public final class CommentMapper {
         dto.setCreation(comment.getCreation());
         dto.setModified(comment.getModified());
         
-        // Set permissions
+        // Set permissions and user vote
         if (currentUser != null) {
             dto.setCanEdit(comment.getAuthor().getId().equals(currentUser.getId()));
             dto.setCanDelete(comment.getAuthor().getId().equals(currentUser.getId()) || isAdminUser(currentUser));
@@ -79,7 +79,7 @@ public final class CommentMapper {
         response.setCreation(comment.getCreation());
         response.setModified(comment.getModified());
         
-        // Set permissions
+        // Set permissions and user vote
         if (currentUser != null) {
             response.setCanEdit(comment.getAuthor().getId().equals(currentUser.getId()));
             response.setCanDelete(comment.getAuthor().getId().equals(currentUser.getId()) || isAdminUser(currentUser));

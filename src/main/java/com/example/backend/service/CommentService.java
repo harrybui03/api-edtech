@@ -1,12 +1,10 @@
 package com.example.backend.service;
 
 import com.example.backend.constant.VoteType;
-import com.example.backend.dto.model.CommentDto;
 import com.example.backend.dto.request.comment.CommentRequest;
 import com.example.backend.dto.response.comment.CommentResponse;
 import com.example.backend.entity.*;
 import com.example.backend.excecption.ForbiddenException;
-import com.example.backend.excecption.InvalidRequestDataException;
 import com.example.backend.excecption.ResourceNotFoundException;
 import com.example.backend.mapper.CommentMapper;
 import com.example.backend.repository.*;
@@ -43,29 +41,23 @@ public class CommentService {
         comment.setAuthor(currentUser);
         comment.setModifiedBy(currentUser.getId());
 
+        // Handle parent comment if this is a reply
+        if (request.getParentId() != null) {
+            Comment parentComment = findCommentById(request.getParentId());
+            
+            // Verify parent comment belongs to the same lesson
+            if (!parentComment.getLesson().getId().equals(lessonId)) {
+                throw new ForbiddenException("Parent comment does not belong to this lesson");
+            }
+            
+            comment.setParent(parentComment);
+        }
+
         Comment savedComment = commentRepository.save(comment);
         List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(lessonId);
         return CommentMapper.toResponse(savedComment, currentUser, votes);
     }
 
-    @Transactional
-    public CommentResponse createReply(UUID commentId, CommentRequest request) {
-        User currentUser = getCurrentUser();
-        Comment parentComment = findCommentById(commentId);
-        
-        // Verify user has access to the lesson
-        verifyLessonAccess(parentComment.getLesson(), currentUser.getId());
-
-        Comment reply = CommentMapper.toEntity(request);
-        reply.setLesson(parentComment.getLesson());
-        reply.setParent(parentComment);
-        reply.setAuthor(currentUser);
-        reply.setModifiedBy(currentUser.getId());
-
-        Comment savedReply = commentRepository.save(reply);
-        List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(parentComment.getLesson().getId());
-        return CommentMapper.toResponse(savedReply, currentUser, votes);
-    }
 
     @Transactional(readOnly = true)
     public Page<CommentResponse> getCommentsForLesson(UUID lessonId, Pageable pageable) {
@@ -116,62 +108,6 @@ public class CommentService {
         commentRepository.save(comment);
     }
 
-    @Transactional
-    public CommentResponse upvoteComment(UUID commentId) {
-        return voteComment(commentId, VoteType.UPVOTE);
-    }
-
-    @Transactional
-    public CommentResponse downvoteComment(UUID commentId) {
-        return voteComment(commentId, VoteType.DOWNVOTE);
-    }
-
-    @Transactional
-    private CommentResponse voteComment(UUID commentId, VoteType voteType) {
-        User currentUser = getCurrentUser();
-        Comment comment = findCommentById(commentId);
-        
-        // Verify user has access to the lesson
-        verifyLessonAccess(comment.getLesson(), currentUser.getId());
-
-        // Check if user already voted
-        CommentVote existingVote = commentVoteRepository.findByCommentIdAndUserId(commentId, currentUser.getId())
-                .orElse(null);
-
-        if (existingVote != null) {
-            if (existingVote.getVoteType() == voteType) {
-                // Remove vote if clicking the same vote type
-                commentVoteRepository.delete(existingVote);
-                updateCommentVoteCounts(comment);
-            } else {
-                // Change vote type
-                existingVote.setVoteType(voteType);
-                commentVoteRepository.save(existingVote);
-                updateCommentVoteCounts(comment);
-            }
-        } else {
-            // Create new vote
-            CommentVote newVote = CommentVote.builder()
-                    .comment(comment)
-                    .user(currentUser)
-                    .voteType(voteType)
-                    .build();
-            commentVoteRepository.save(newVote);
-            updateCommentVoteCounts(comment);
-        }
-
-        Comment updatedComment = commentRepository.save(comment);
-        List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(comment.getLesson().getId());
-        return CommentMapper.toResponse(updatedComment, currentUser, votes);
-    }
-
-    private void updateCommentVoteCounts(Comment comment) {
-        long upvotes = commentVoteRepository.countByCommentIdAndVoteType(comment.getId(), VoteType.UPVOTE);
-        long downvotes = commentVoteRepository.countByCommentIdAndVoteType(comment.getId(), VoteType.DOWNVOTE);
-        
-        comment.setUpvotes((int) upvotes);
-        comment.setDownvotes((int) downvotes);
-    }
 
     private User getCurrentUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -195,6 +131,53 @@ public class CommentService {
         if (!hasAccess) {
             throw new ForbiddenException("You must be enrolled in the course to access this lesson's comments");
         }
+    }
+
+    @Transactional
+    public CommentResponse voteComment(UUID commentId, VoteType voteType) {
+        User currentUser = getCurrentUser();
+        Comment comment = findCommentById(commentId);
+        
+        // Verify user has access to the lesson
+        verifyLessonAccess(comment.getLesson(), currentUser.getId());
+
+        // Check if user already voted
+        CommentVote existingVote = commentVoteRepository.findByCommentIdAndUserId(commentId, currentUser.getId())
+                .orElse(null);
+
+        if (existingVote != null) {
+            if (existingVote.getVoteType() == voteType) {
+                // Remove vote if clicking the same vote type
+                commentVoteRepository.delete(existingVote);
+            } else {
+                // Change vote type
+                existingVote.setVoteType(voteType);
+                commentVoteRepository.save(existingVote);
+            }
+        } else {
+            // Create new vote
+            CommentVote newVote = CommentVote.builder()
+                    .comment(comment)
+                    .user(currentUser)
+                    .voteType(voteType)
+                    .build();
+            commentVoteRepository.save(newVote);
+        }
+
+        // Update vote counts
+        updateCommentVoteCounts(comment);
+        Comment updatedComment = commentRepository.save(comment);
+        
+        List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(comment.getLesson().getId());
+        return CommentMapper.toResponse(updatedComment, currentUser, votes);
+    }
+    
+    private void updateCommentVoteCounts(Comment comment) {
+        long upvotes = commentVoteRepository.countByCommentIdAndVoteType(comment.getId(), VoteType.UPVOTE);
+        long downvotes = commentVoteRepository.countByCommentIdAndVoteType(comment.getId(), VoteType.DOWNVOTE);
+        
+        comment.setUpvotes((int) upvotes);
+        comment.setDownvotes((int) downvotes);
     }
 
     private boolean isAdminUser(User user) {

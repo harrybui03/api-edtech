@@ -11,6 +11,7 @@ import com.example.backend.dto.request.course.LessonRequest;
 import com.example.backend.dto.request.instructor.InstructorIdRequest;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
+import com.example.backend.dto.request.quiz.QuizQuestionsRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
@@ -25,7 +26,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -118,16 +118,14 @@ public class InstructorController {
     @GetMapping("/courses/{courseId}/enrollments")
     @Operation(summary = "Get course enrollments", description = "Instructor gets all enrollments for their course")
     public ResponseEntity<List<EnrollmentResponse>> getCourseEnrollments(@PathVariable UUID courseId) {
-        String currentUserEmail = getCurrentUserEmail();
-        List<EnrollmentResponse> enrollments = enrollmentService.getCourseEnrollments(courseId, currentUserEmail);
+        List<EnrollmentResponse> enrollments = enrollmentService.getCourseEnrollments(courseId);
         return ResponseEntity.ok(enrollments);
     }
     
     @DeleteMapping("/enrollments/{enrollmentId}")
     @Operation(summary = "Remove enrollment", description = "Instructor removes a student from their course")
     public ResponseEntity<Void> removeEnrollment(@PathVariable UUID enrollmentId) {
-        String currentUserEmail = getCurrentUserEmail();
-        enrollmentService.removeEnrollment(enrollmentId, currentUserEmail);
+        enrollmentService.removeEnrollment(enrollmentId);
         return ResponseEntity.noContent().build();
     }
     
@@ -135,52 +133,42 @@ public class InstructorController {
     @PostMapping("/quizzes")
     @Operation(summary = "Create a new quiz", description = "Instructor creates a new quiz for a course")
     public ResponseEntity<QuizDto> createQuiz(@RequestBody QuizRequest request) {
-        String currentUserEmail = getCurrentUserEmail();
-        QuizDto quiz = quizService.createQuiz(request, currentUserEmail);
+        QuizDto quiz = quizService.createQuiz(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(quiz);
     }
 
     @PutMapping("/quizzes/{quizId}")
     @Operation(summary = "Update quiz", description = "Instructor updates an existing quiz")
     public ResponseEntity<QuizDto> updateQuiz(@PathVariable UUID quizId, @RequestBody QuizRequest request) {
-        String currentUserEmail = getCurrentUserEmail();
-        QuizDto quiz = quizService.updateQuiz(quizId, request, currentUserEmail);
+        QuizDto quiz = quizService.updateQuiz(quizId, request);
         return ResponseEntity.ok(quiz);
     }
 
     @DeleteMapping("/quizzes/{quizId}")
     @Operation(summary = "Delete quiz", description = "Instructor deletes a quiz")
     public ResponseEntity<Void> deleteQuiz(@PathVariable UUID quizId) {
-        String currentUserEmail = getCurrentUserEmail();
-        quizService.deleteQuiz(quizId, currentUserEmail);
+        quizService.deleteQuiz(quizId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/quizzes/{quizId}/questions")
-    @Operation(summary = "Add question to quiz", description = "Instructor adds a question to a quiz")
-    public ResponseEntity<QuizDto> addQuestionToQuiz(@PathVariable UUID quizId, @RequestBody QuizQuestionRequest request) {
-        String currentUserEmail = getCurrentUserEmail();
-        QuizDto quiz = quizService.addQuestionToQuiz(quizId, request, currentUserEmail);
+    @Operation(summary = "Add questions to quiz", description = "Instructor adds multiple questions to a quiz")
+    public ResponseEntity<QuizDto> addQuestionsToQuiz(@PathVariable UUID quizId, @RequestBody QuizQuestionsRequest request) {
+        QuizDto quiz = quizService.addQuestionsToQuiz(quizId, request.getQuestions());
         return ResponseEntity.status(HttpStatus.CREATED).body(quiz);
     }
 
     @PutMapping("/questions/{questionId}")
     @Operation(summary = "Update question", description = "Instructor updates a quiz question")
     public ResponseEntity<Void> updateQuestion(@PathVariable UUID questionId, @RequestBody QuizQuestionRequest request) {
-        String currentUserEmail = getCurrentUserEmail();
-        quizService.updateQuestion(questionId, request, currentUserEmail);
+        quizService.updateQuestion(questionId, request);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/courses/{courseId}/quiz-submissions")
     @Operation(summary = "Get quiz submissions for course", description = "Instructor gets all quiz submissions for their course")
     public ResponseEntity<List<QuizSubmissionResponse>> getCourseQuizSubmissions(@PathVariable UUID courseId) {
-        String currentUserEmail = getCurrentUserEmail();
-        List<QuizSubmissionResponse> submissions = quizService.getCourseQuizSubmissions(courseId, currentUserEmail);
+        List<QuizSubmissionResponse> submissions = quizService.getCourseQuizSubmissions(courseId);
         return ResponseEntity.ok(submissions);
-    }
-
-    private String getCurrentUserEmail() {
-        return SecurityContextHolder.getContext().getAuthentication().getName();
     }
 }

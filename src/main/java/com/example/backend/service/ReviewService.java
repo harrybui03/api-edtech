@@ -1,10 +1,8 @@
 package com.example.backend.service;
 
-import com.example.backend.dto.model.ReviewDto;
 import com.example.backend.dto.request.review.ReviewRequest;
 import com.example.backend.dto.response.review.ReviewResponse;
 import com.example.backend.entity.Course;
-import com.example.backend.entity.Enrollment;
 import com.example.backend.entity.Review;
 import com.example.backend.entity.User;
 import com.example.backend.excecption.ForbiddenException;
@@ -22,7 +20,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
@@ -101,25 +98,6 @@ public class ReviewService {
         return ReviewMapper.toResponse(review);
     }
 
-    @Transactional(readOnly = true)
-    public Page<ReviewResponse> getAllReviewsForAdmin(Pageable pageable) {
-        Page<Review> reviews = reviewRepository.findAllByOrderByCreationDesc(pageable);
-        return reviews.map(ReviewMapper::toResponse);
-    }
-
-    @Transactional
-    public ReviewResponse approveReview(UUID reviewId) {
-        User currentUser = getCurrentUser();
-        Review review = findReviewById(reviewId);
-        
-        review.setIsApproved(true);
-        review.setApprovedBy(currentUser);
-        review.setApprovedAt(OffsetDateTime.now());
-        review.setModifiedBy(currentUser.getId());
-
-        Review approvedReview = reviewRepository.save(review);
-        return ReviewMapper.toResponse(approvedReview);
-    }
 
     @Transactional(readOnly = true)
     public Double getAverageRatingForCourse(UUID courseId) {
