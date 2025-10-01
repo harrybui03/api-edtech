@@ -15,7 +15,6 @@ import com.example.backend.mapper.QuizQuestionMapper;
 import com.example.backend.mapper.QuizSubmissionMapper;
 import com.example.backend.repository.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,7 +38,9 @@ public class QuizService {
     private final ObjectMapper objectMapper;
 
     @Transactional
-    public QuizDto createQuiz(QuizRequest request, String instructorEmail) {
+    public QuizDto createQuiz(QuizRequest request) {
+        String instructorEmail = getCurrentUserEmail();
+        
         // Verify instructor access to course
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
@@ -63,7 +64,9 @@ public class QuizService {
     }
 
     @Transactional
-    public QuizDto updateQuiz(UUID quizId, QuizRequest request, String instructorEmail) {
+    public QuizDto updateQuiz(UUID quizId, QuizRequest request) {
+        String instructorEmail = getCurrentUserEmail();
+        
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
 
@@ -92,7 +95,9 @@ public class QuizService {
     }
 
     @Transactional
-    public void deleteQuiz(UUID quizId, String instructorEmail) {
+    public void deleteQuiz(UUID quizId) {
+        String instructorEmail = getCurrentUserEmail();
+        
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
 
@@ -103,16 +108,23 @@ public class QuizService {
     }
 
     @Transactional
-    public QuizDto addQuestionToQuiz(UUID quizId, QuizQuestionRequest request, String instructorEmail) {
+    public QuizDto addQuestionsToQuiz(UUID quizId, List<QuizQuestionRequest> requests) {
+        String instructorEmail = getCurrentUserEmail();
+        
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
 
         verifyInstructorAccess(quiz.getCourse().getId(), instructorEmail);
 
-        QuizQuestion question = QuizQuestionMapper.toEntity(request);
-        question.setQuiz(quiz);
-
-        quizQuestionRepository.save(question);
+        // Process all questions in batch
+        List<QuizQuestion> questions = new ArrayList<>();
+        for (QuizQuestionRequest request : requests) {
+            QuizQuestion question = QuizQuestionMapper.toEntity(request);
+            question.setQuiz(quiz);
+            questions.add(question);
+        }
+        
+        quizQuestionRepository.saveAll(questions);
 
         // Update total marks
         List<QuizQuestion> allQuestions = quizQuestionRepository.findByQuizIdOrderByCreation(quizId);
@@ -125,7 +137,9 @@ public class QuizService {
     }
 
     @Transactional
-    public void updateQuestion(UUID questionId, QuizQuestionRequest request, String instructorEmail) {
+    public void updateQuestion(UUID questionId, QuizQuestionRequest request) {
+        String instructorEmail = getCurrentUserEmail();
+        
         QuizQuestion question = quizQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
@@ -228,7 +242,9 @@ public class QuizService {
     }
 
     @Transactional(readOnly = true)
-    public List<QuizSubmissionResponse> getCourseQuizSubmissions(UUID courseId, String instructorEmail) {
+    public List<QuizSubmissionResponse> getCourseQuizSubmissions(UUID courseId) {
+        String instructorEmail = getCurrentUserEmail();
+        
         verifyInstructorAccess(courseId, instructorEmail);
 
         List<Quiz> quizzes = quizRepository.findByCourseId(courseId);
@@ -298,6 +314,10 @@ public class QuizService {
         return courseInstructorRepository.existsByCourseIdAndInstructorEmail(courseId, email);
     }
 
+    private String getCurrentUserEmail() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
+    }
+    
     private UUID getCurrentUserId(String email) {
         return userRepository.findByEmail(email)
                 .map(User::getId)

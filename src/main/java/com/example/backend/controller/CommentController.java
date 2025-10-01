@@ -1,6 +1,7 @@
 package com.example.backend.controller;
 
 import com.example.backend.dto.request.comment.CommentRequest;
+import com.example.backend.dto.request.comment.VoteRequest;
 import com.example.backend.dto.response.comment.CommentResponse;
 import com.example.backend.service.CommentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,22 +27,12 @@ public class CommentController {
 
     @PostMapping("/lessons/{lessonId}/comments")
     @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
-    @Operation(summary = "Create comment", description = "Create a root comment on a lesson")
+    @Operation(summary = "Create comment", description = "Create a comment on a lesson. Include parentId in request body to create a reply to existing comment.")
     public ResponseEntity<CommentResponse> createComment(
             @PathVariable UUID lessonId,
             @Valid @RequestBody CommentRequest request) {
         CommentResponse comment = commentService.createComment(lessonId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(comment);
-    }
-
-    @PostMapping("/comments/{commentId}/replies")
-    @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
-    @Operation(summary = "Create reply", description = "Create a reply to an existing comment")
-    public ResponseEntity<CommentResponse> createReply(
-            @PathVariable UUID commentId,
-            @Valid @RequestBody CommentRequest request) {
-        CommentResponse reply = commentService.createReply(commentId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(reply);
     }
 
     @GetMapping("/lessons/{lessonId}/comments")
@@ -72,19 +63,13 @@ public class CommentController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/comments/{commentId}/upvote")
+    @PostMapping("/comments/{commentId}/vote")
     @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
-    @Operation(summary = "Upvote comment", description = "Add or toggle upvote on a comment")
-    public ResponseEntity<CommentResponse> upvoteComment(@PathVariable UUID commentId) {
-        CommentResponse comment = commentService.upvoteComment(commentId);
-        return ResponseEntity.ok(comment);
-    }
-
-    @PostMapping("/comments/{commentId}/downvote")
-    @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
-    @Operation(summary = "Downvote comment", description = "Add or toggle downvote on a comment")
-    public ResponseEntity<CommentResponse> downvoteComment(@PathVariable UUID commentId) {
-        CommentResponse comment = commentService.downvoteComment(commentId);
+    @Operation(summary = "Vote on comment", description = "Add, change, or toggle vote on a comment (UPVOTE or DOWNVOTE)")
+    public ResponseEntity<CommentResponse> voteComment(
+            @PathVariable UUID commentId,
+            @Valid @RequestBody VoteRequest request) {
+        CommentResponse comment = commentService.voteComment(commentId, request.getVoteType());
         return ResponseEntity.ok(comment);
     }
 }
