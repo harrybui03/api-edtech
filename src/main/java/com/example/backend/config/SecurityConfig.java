@@ -49,7 +49,8 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(WHITE_LIST_URLS).permitAll()
-                        .requestMatchers("/instructor/**").hasAuthority("COURSE_CREATOR")
+                        .requestMatchers("/admin/**").hasAnyRole("SYSTEM_MANAGER", "MODERATOR")
+                        .requestMatchers("/instructor/**").hasRole("COURSE_CREATOR")
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

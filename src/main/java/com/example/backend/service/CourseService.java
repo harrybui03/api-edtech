@@ -46,11 +46,8 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public Page<CourseDto> getPublishedCourses(Pageable pageable, List<String> tags, List<String> labels, String search) {
-        // Start with your first, non-nullable Specification.
         Specification<Course> spec = CourseSpecification.isPublished();
 
-        // Chain the rest using the .and() instance method.
-        // The .and() method is null-safe, so if a spec method returns null, it's ignored.
         spec = spec.and(CourseSpecification.titleContains(search))
                 .and(CourseSpecification.hasLabels(labels))
                 .and(CourseSpecification.hasTags(tags));
