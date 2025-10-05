@@ -31,4 +31,5 @@ public class CourseDto {
     private String language;
     private List<TagDto> tags;
     private List<LabelDto> labels;
+    private List<ChapterDto> chapters;
 }

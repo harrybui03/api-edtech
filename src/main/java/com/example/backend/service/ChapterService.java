@@ -40,6 +40,13 @@ public class ChapterService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public ChapterDto getChapterByIdForInstructor(UUID chapterId) {
+        Chapter chapter = findChapterById(chapterId);
+        checkCourseOwnership(chapter.getCourse());
+        return chapterMapper.toDto(chapter);
+    }
+
     @Transactional
     public ChapterDto createChapter(UUID courseId, ChapterRequest request) {
         Course course = findCourseById(courseId);

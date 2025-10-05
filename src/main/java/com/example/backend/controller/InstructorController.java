@@ -64,6 +64,18 @@ public class InstructorController {
         return ResponseEntity.ok(new PaginationResponse<>(courses));
     }
 
+    @GetMapping("/courses/{courseId}")
+    @Operation(summary = "Get course by ID for instructor", description = "Instructor gets their course details, including all chapters and lessons.")
+    public ResponseEntity<CourseDto> getCourseByIdForInstructor(@PathVariable UUID courseId) {
+        return ResponseEntity.ok(courseService.getCourseByIdForInstructor(courseId));
+    }
+
+    @GetMapping("/chapters/{chapterId}")
+    @Operation(summary = "Get chapter by ID for instructor", description = "Instructor gets their chapter details, including all lessons.")
+    public ResponseEntity<ChapterDto> getChapterByIdForInstructor(@PathVariable UUID chapterId) {
+        return ResponseEntity.ok(chapterService.getChapterByIdForInstructor(chapterId));
+    }
+
     @PutMapping("/courses/{courseId}/publish")
     public ResponseEntity<Void> publishCourse(@PathVariable UUID courseId) {
         courseService.publishCourse(courseId);

@@ -72,6 +72,15 @@ public class CourseService {
         return courseMapper.toDto(course, tags, labels);
     }
 
+    @Transactional(readOnly = true)
+    public CourseDto getCourseByIdForInstructor(UUID courseId) {
+        Course course = findCourseById(courseId);
+        checkCourseOwnership(course);
+        List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+        List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+        return courseMapper.toDto(course, tags, labels);
+    }
+
     @Transactional
     public CourseDto createCourse(CourseRequest request) {
         User currentUser = getCurrentUser();
