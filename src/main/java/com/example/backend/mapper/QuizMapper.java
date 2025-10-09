@@ -20,21 +20,12 @@ public final class QuizMapper {
         QuizDto dto = new QuizDto();
         dto.setId(quiz.getId());
         dto.setTitle(quiz.getTitle());
-        dto.setExplanation(quiz.getExplanation());
-        dto.setLessonId(quiz.getLesson() != null ? quiz.getLesson().getId() : null);
-        dto.setCourseId(quiz.getCourse() != null ? quiz.getCourse().getId() : null);
-        dto.setMaxAttempts(quiz.getMaxAttempts());
         dto.setShowAnswers(quiz.getShowAnswers());
         dto.setShowSubmissionHistory(quiz.getShowSubmissionHistory());
         dto.setTotalMarks(quiz.getTotalMarks());
-        dto.setPassingPercentage(quiz.getPassingPercentage());
-        dto.setDuration(quiz.getDuration());
-        dto.setShuffleQuestions(quiz.getShuffleQuestions());
-        dto.setLimitQuestionsTo(quiz.getLimitQuestionsTo());
-        dto.setEnableNegativeMarking(quiz.getEnableNegativeMarking());
-        dto.setMarksToCut(quiz.getMarksToCut());
         dto.setCreation(quiz.getCreation());
         dto.setModified(quiz.getModified());
+        dto.setModifiedBy(quiz.getModifiedBy());
         return dto;
     }
 
@@ -45,21 +36,12 @@ public final class QuizMapper {
         QuizResponse response = new QuizResponse();
         response.setId(quiz.getId());
         response.setTitle(quiz.getTitle());
-        response.setExplanation(quiz.getExplanation());
-        response.setLessonId(quiz.getLesson() != null ? quiz.getLesson().getId() : null);
-        response.setCourseId(quiz.getCourse() != null ? quiz.getCourse().getId() : null);
-        response.setMaxAttempts(quiz.getMaxAttempts());
         response.setShowAnswers(quiz.getShowAnswers());
         response.setShowSubmissionHistory(quiz.getShowSubmissionHistory());
         response.setTotalMarks(quiz.getTotalMarks());
-        response.setPassingPercentage(quiz.getPassingPercentage());
-        response.setDuration(quiz.getDuration());
-        response.setShuffleQuestions(quiz.getShuffleQuestions());
-        response.setLimitQuestionsTo(quiz.getLimitQuestionsTo());
-        response.setEnableNegativeMarking(quiz.getEnableNegativeMarking());
-        response.setMarksToCut(quiz.getMarksToCut());
         response.setCreation(quiz.getCreation());
         response.setModified(quiz.getModified());
+        response.setModifiedBy(quiz.getModifiedBy());
         response.setQuestions(toQuestionDtoList(questions));
         response.setUserAttempts(userAttempts);
         return response;
@@ -71,16 +53,8 @@ public final class QuizMapper {
         }
         Quiz quiz = new Quiz();
         quiz.setTitle(request.getTitle());
-        quiz.setExplanation(request.getExplanation());
-        quiz.setMaxAttempts(request.getMaxAttempts());
         quiz.setShowAnswers(request.getShowAnswers());
         quiz.setShowSubmissionHistory(request.getShowSubmissionHistory());
-        quiz.setPassingPercentage(request.getPassingPercentage());
-        quiz.setDuration(request.getDuration());
-        quiz.setShuffleQuestions(request.getShuffleQuestions());
-        quiz.setLimitQuestionsTo(request.getLimitQuestionsTo());
-        quiz.setEnableNegativeMarking(request.getEnableNegativeMarking());
-        quiz.setMarksToCut(request.getMarksToCut());
         return quiz;
     }
 
@@ -89,16 +63,8 @@ public final class QuizMapper {
             return;
         }
         quiz.setTitle(request.getTitle());
-        quiz.setExplanation(request.getExplanation());
-        quiz.setMaxAttempts(request.getMaxAttempts());
         quiz.setShowAnswers(request.getShowAnswers());
         quiz.setShowSubmissionHistory(request.getShowSubmissionHistory());
-        quiz.setPassingPercentage(request.getPassingPercentage());
-        quiz.setDuration(request.getDuration());
-        quiz.setShuffleQuestions(request.getShuffleQuestions());
-        quiz.setLimitQuestionsTo(request.getLimitQuestionsTo());
-        quiz.setEnableNegativeMarking(request.getEnableNegativeMarking());
-        quiz.setMarksToCut(request.getMarksToCut());
     }
 
     private static List<QuizQuestionDto> toQuestionDtoList(List<QuizQuestion> questions) {

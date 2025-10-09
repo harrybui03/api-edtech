@@ -8,7 +8,6 @@ import com.example.backend.dto.response.quiz.QuizResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
 import com.example.backend.entity.*;
 import com.example.backend.excecption.ForbiddenException;
-import com.example.backend.excecption.InvalidRequestDataException;
 import com.example.backend.excecption.ResourceNotFoundException;
 import com.example.backend.mapper.QuizMapper;
 import com.example.backend.mapper.QuizQuestionMapper;
@@ -22,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,33 +29,13 @@ public class QuizService {
     private final QuizRepository quizRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizSubmissionRepository quizSubmissionRepository;
-    private final CourseRepository courseRepository;
-    private final LessonRepository lessonRepository;
     private final UserRepository userRepository;
-    private final CourseInstructorRepository courseInstructorRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional
     public QuizDto createQuiz(QuizRequest request) {
-        String instructorEmail = getCurrentUserEmail();
-        
-        // Verify instructor access to course
-        Course course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-
-        verifyInstructorAccess(course.getId(), instructorEmail);
-
         Quiz quiz = QuizMapper.toEntity(request);
-        quiz.setCourse(course);
-
-        // Set lesson if provided
-        if (request.getLessonId() != null) {
-            Lesson lesson = lessonRepository.findById(request.getLessonId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
-            quiz.setLesson(lesson);
-        }
-
-        quiz.setModifiedBy(getCurrentUserId(instructorEmail));
+        quiz.setModifiedBy(getCurrentUserId(getCurrentUserEmail()));
         Quiz savedQuiz = quizRepository.save(quiz);
 
         return QuizMapper.toDto(savedQuiz);
@@ -65,25 +43,11 @@ public class QuizService {
 
     @Transactional
     public QuizDto updateQuiz(UUID quizId, QuizRequest request) {
-        String instructorEmail = getCurrentUserEmail();
-        
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
 
-        verifyInstructorAccess(quiz.getCourse().getId(), instructorEmail);
-
         QuizMapper.updateEntityFromRequest(request, quiz);
-
-        // Update lesson if provided
-        if (request.getLessonId() != null) {
-            Lesson lesson = lessonRepository.findById(request.getLessonId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
-            quiz.setLesson(lesson);
-        } else {
-            quiz.setLesson(null);
-        }
-
-        quiz.setModifiedBy(getCurrentUserId(instructorEmail));
+        quiz.setModifiedBy(getCurrentUserId(getCurrentUserEmail()));
 
         // Recalculate total marks
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderByCreation(quizId);
@@ -96,12 +60,8 @@ public class QuizService {
 
     @Transactional
     public void deleteQuiz(UUID quizId) {
-        String instructorEmail = getCurrentUserEmail();
-        
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
-
-        verifyInstructorAccess(quiz.getCourse().getId(), instructorEmail);
 
         // Delete related submissions and questions (handled by cascade if configured)
         quizRepository.delete(quiz);
@@ -109,12 +69,8 @@ public class QuizService {
 
     @Transactional
     public QuizDto addQuestionsToQuiz(UUID quizId, List<QuizQuestionRequest> requests) {
-        String instructorEmail = getCurrentUserEmail();
-        
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
-
-        verifyInstructorAccess(quiz.getCourse().getId(), instructorEmail);
 
         // Process all questions in batch
         List<QuizQuestion> questions = new ArrayList<>();
@@ -130,7 +86,7 @@ public class QuizService {
         List<QuizQuestion> allQuestions = quizQuestionRepository.findByQuizIdOrderByCreation(quizId);
         int totalMarks = allQuestions.stream().mapToInt(QuizQuestion::getMarks).sum();
         quiz.setTotalMarks(totalMarks);
-        quiz.setModifiedBy(getCurrentUserId(instructorEmail));
+        quiz.setModifiedBy(getCurrentUserId(getCurrentUserEmail()));
         quizRepository.save(quiz);
 
         return QuizMapper.toDto(quiz);
@@ -138,12 +94,8 @@ public class QuizService {
 
     @Transactional
     public void updateQuestion(UUID questionId, QuizQuestionRequest request) {
-        String instructorEmail = getCurrentUserEmail();
-        
         QuizQuestion question = quizQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
-
-        verifyInstructorAccess(question.getQuiz().getCourse().getId(), instructorEmail);
 
         QuizQuestionMapper.updateEntityFromRequest(request, question);
         quizQuestionRepository.save(question);
@@ -153,7 +105,7 @@ public class QuizService {
         List<QuizQuestion> allQuestions = quizQuestionRepository.findByQuizIdOrderByCreation(quiz.getId());
         int totalMarks = allQuestions.stream().mapToInt(QuizQuestion::getMarks).sum();
         quiz.setTotalMarks(totalMarks);
-        quiz.setModifiedBy(getCurrentUserId(instructorEmail));
+        quiz.setModifiedBy(getCurrentUserId(getCurrentUserEmail()));
         quizRepository.save(quiz);
     }
 
@@ -162,7 +114,6 @@ public class QuizService {
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
 
-        // Check if user is enrolled in the course
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -171,11 +122,6 @@ public class QuizService {
 
         // Get user's attempt count
         int userAttempts = quizSubmissionRepository.countByQuizIdAndMemberId(quizId, user.getId());
-
-        // Check if user can still attempt
-        if (quiz.getMaxAttempts() > 0 && userAttempts >= quiz.getMaxAttempts()) {
-            throw new InvalidRequestDataException("Maximum attempts reached for this quiz");
-        }
 
         return QuizMapper.toResponse(quiz, questions, userAttempts);
     }
@@ -187,12 +133,6 @@ public class QuizService {
 
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        // Check attempt limits
-        int userAttempts = quizSubmissionRepository.countByQuizIdAndMemberId(quizId, user.getId());
-        if (quiz.getMaxAttempts() > 0 && userAttempts >= quiz.getMaxAttempts()) {
-            throw new InvalidRequestDataException("Maximum attempts reached for this quiz");
-        }
 
         // Get questions
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderByCreation(quizId);
@@ -206,11 +146,8 @@ public class QuizService {
         QuizSubmission submission = new QuizSubmission();
         submission.setQuiz(quiz);
         submission.setMember(user);
-        submission.setCourse(quiz.getCourse());
         submission.setScore(score);
-        submission.setScoreOutOf(quiz.getTotalMarks());
         submission.setPercentage(percentage);
-        submission.setPassingPercentage(quiz.getPassingPercentage());
 
         try {
             submission.setResult(objectMapper.writeValueAsString(detailedResult));
@@ -227,31 +164,16 @@ public class QuizService {
         QuizSubmission submission = quizSubmissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
 
-        // Allow access to instructor or the student who submitted
+        // Allow access only to the student who submitted
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         boolean isOwner = submission.getMember().getId().equals(user.getId());
-        boolean isInstructor = isInstructorOfCourse(submission.getCourse().getId(), userEmail);
-
-        if (!isOwner && !isInstructor) {
+        if (!isOwner) {
             throw new ForbiddenException("Access denied to this submission");
         }
 
         return QuizSubmissionMapper.toResponse(submission);
-    }
-
-    @Transactional(readOnly = true)
-    public List<QuizSubmissionResponse> getCourseQuizSubmissions(UUID courseId) {
-        String instructorEmail = getCurrentUserEmail();
-        
-        verifyInstructorAccess(courseId, instructorEmail);
-
-        List<Quiz> quizzes = quizRepository.findByCourseId(courseId);
-        return quizzes.stream()
-                .flatMap(quiz -> quizSubmissionRepository.findByQuizIdOrderByCreationDesc(quiz.getId()).stream())
-                .map(QuizSubmissionMapper::toResponse)
-                .collect(Collectors.toList());
     }
 
     private Map<String, Object> calculateScore(List<QuizQuestion> questions, Map<UUID, String> answers, Quiz quiz) {
@@ -269,14 +191,10 @@ public class QuizService {
             boolean isCorrect = false;
             int marksAwarded = 0;
 
-            if (userAnswer != null && userAnswer.trim().equalsIgnoreCase(correctAnswer.trim())) {
+            if (userAnswer != null && userAnswer.trim().equalsIgnoreCase(correctAnswer != null ? correctAnswer.trim() : null)) {
                 isCorrect = true;
                 marksAwarded = question.getMarks();
                 totalScore += marksAwarded;
-            } else if (quiz.getEnableNegativeMarking() && userAnswer != null && !userAnswer.trim().isEmpty()) {
-                // Apply negative marking for wrong answers
-                marksAwarded = -quiz.getMarksToCut();
-                totalScore += marksAwarded; // This will subtract marks
             }
 
             questionResult.put("questionId", question.getId());
@@ -299,19 +217,9 @@ public class QuizService {
         result.put("totalPossibleMarks", totalPossibleMarks);
         result.put("percentage", percentage);
         result.put("questionResults", questionResults);
-        result.put("passed", percentage >= quiz.getPassingPercentage());
+        // No pass/fail flag in simplified model
 
         return result;
-    }
-
-    private void verifyInstructorAccess(UUID courseId, String instructorEmail) {
-        if (!isInstructorOfCourse(courseId, instructorEmail)) {
-            throw new ForbiddenException("Access denied. You are not an instructor of this course");
-        }
-    }
-
-    private boolean isInstructorOfCourse(UUID courseId, String email) {
-        return courseInstructorRepository.existsByCourseIdAndInstructorEmail(courseId, email);
     }
 
     private String getCurrentUserEmail() {

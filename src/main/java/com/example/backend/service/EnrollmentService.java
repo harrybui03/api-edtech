@@ -1,5 +1,6 @@
 package com.example.backend.service;
 
+import com.example.backend.constant.CourseStatus;
 import com.example.backend.constant.EnrollmentMemberType;
 import com.example.backend.constant.EnrollmentRole;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
@@ -48,8 +49,7 @@ public class EnrollmentService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
         
-        // Check if course is published and available for enrollment
-        if (!Boolean.TRUE.equals(course.getPublished())) {
+        if (course.getStatus() != CourseStatus.PUBLISHED) {
             throw new RuntimeException("Course is not available for enrollment");
         }
         
@@ -60,7 +60,6 @@ public class EnrollmentService {
         enrollment.setMemberType(EnrollmentMemberType.STUDENT);
         enrollment.setRole(EnrollmentRole.MEMBER);
         enrollment.setProgress(BigDecimal.ZERO);
-        enrollment.setPurchasedCertificate(false);
         
         enrollment = enrollmentRepository.save(enrollment);
         
@@ -70,7 +69,7 @@ public class EnrollmentService {
         
         log.info("Successfully enrolled student {} in course {}", studentEmail, courseId);
         
-        return enrollmentMapper.mapToEnrollmentResponse(enrollment);
+        return enrollmentMapper.toResponse(enrollment);
     }
     
     @Transactional(readOnly = true)
@@ -84,7 +83,7 @@ public class EnrollmentService {
         List<Enrollment> enrollments = enrollmentRepository.findByMemberId(student.getId());
         
         return enrollments.stream()
-                .map(enrollmentMapper::mapToEnrollmentResponse)
+                .map(enrollmentMapper::toResponse)
                 .collect(Collectors.toList());
     }
     
@@ -110,7 +109,7 @@ public class EnrollmentService {
         List<Enrollment> enrollments = enrollmentRepository.findByCourseIdAndInstructorId(courseId, instructor.getId());
         
         return enrollments.stream()
-                .map(enrollmentMapper::mapToEnrollmentResponse)
+                .map(enrollmentMapper::toResponse)
                 .collect(Collectors.toList());
     }
     

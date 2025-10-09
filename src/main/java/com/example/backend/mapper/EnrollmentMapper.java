@@ -1,5 +1,6 @@
 package com.example.backend.mapper;
 
+import com.example.backend.dto.model.EnrollmentDto;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.entity.Enrollment;
 import org.springframework.stereotype.Component;
@@ -7,7 +8,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class EnrollmentMapper {
     
-    public EnrollmentResponse mapToEnrollmentResponse(Enrollment enrollment) {
+    public EnrollmentDto toDto(Enrollment enrollment) {
+        if (enrollment == null) {
+            return null;
+        }
+        EnrollmentDto dto = new EnrollmentDto();
+        dto.setId(enrollment.getId());
+        dto.setMemberId(enrollment.getMember() != null ? enrollment.getMember().getId() : null);
+        dto.setCourseId(enrollment.getCourse() != null ? enrollment.getCourse().getId() : null);
+        dto.setMemberType(enrollment.getMemberType());
+        dto.setRole(enrollment.getRole());
+        dto.setProgress(enrollment.getProgress());
+        dto.setCurrentLessonId(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getId() : null);
+        dto.setCreation(enrollment.getCreation());
+        dto.setModified(enrollment.getModified());
+        return dto;
+    }
+    
+    public EnrollmentResponse toResponse(Enrollment enrollment) {
         return EnrollmentResponse.builder()
                 .id(enrollment.getId())
                 .memberId(enrollment.getMember().getId())
@@ -20,7 +38,8 @@ public class EnrollmentMapper {
                 .progress(enrollment.getProgress())
                 .currentLessonId(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getId() : null)
                 .currentLessonTitle(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getTitle() : null)
-                .enrolledAt(enrollment.getCreation())
+                .creation(enrollment.getCreation())
+                .modified(enrollment.getModified())
                 .build();
     }
 }

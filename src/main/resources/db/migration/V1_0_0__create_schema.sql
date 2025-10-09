@@ -82,6 +82,18 @@ CREATE TABLE chapters (
     modified_by UUID
 );
 
+-- Tables for Quizzes
+CREATE TABLE quizzes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL UNIQUE,
+    show_answers BOOLEAN DEFAULT TRUE,
+    show_submission_history BOOLEAN DEFAULT FALSE,
+    total_marks INTEGER DEFAULT 0,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    modified_by UUID
+);
+
 CREATE TABLE lessons (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(255) NOT NULL,
@@ -122,18 +134,6 @@ CREATE TABLE course_progress (
     creation TIMESTAMPTZ DEFAULT NOW(),
     modified TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (member_id, lesson_id)
-);
-
--- Tables for Quizzes
-CREATE TABLE quizzes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    title VARCHAR(255) NOT NULL UNIQUE,
-    show_answers BOOLEAN DEFAULT TRUE,
-    show_submission_history BOOLEAN DEFAULT FALSE,
-    total_marks INTEGER DEFAULT 0,
-    creation TIMESTAMPTZ DEFAULT NOW(),
-    modified TIMESTAMPTZ DEFAULT NOW(),
-    modified_by UUID
 );
 
 CREATE TABLE quiz_questions (

@@ -35,10 +35,10 @@ BEGIN
     -- 2. SEED COURSES (20 records)
     -- Note: 'published' column is removed, using 'status' instead.
     INSERT INTO courses (id, title, slug, short_introduction, description, status, language, course_price, selling_price) VALUES
-    (course_ids[1], 'Mastering Spring Boot 3', 'mastering-spring-boot-3', 'A comprehensive guide to building modern applications.', 'Covers dependency injection, microservices, security, and testing.', 'APPROVED', 'English', 99.99, 79.99),
-    (course_ids[2], 'Introduction to PostgreSQL', 'introduction-to-postgresql', 'Learn the fundamentals of the world''s most advanced open source database.', 'SQL basics, data types, and simple queries for beginners.', 'APPROVED', 'English', 49.99, 29.99),
-    (course_ids[3], 'Advanced Docker and Kubernetes', 'advanced-docker-kubernetes', 'Deploy and manage containerized applications at scale.', 'Deep dive into orchestration, networking, and storage.', 'APPROVED', 'English', 149.99, 119.99),
-    (course_ids[4], 'React for Beginners', 'react-for-beginners', 'Build modern, interactive user interfaces with React.', 'Learn components, state, props, and hooks from scratch.', 'APPROVED', 'English', 79.99, 59.99),
+    (course_ids[1], 'Mastering Spring Boot 3', 'mastering-spring-boot-3', 'A comprehensive guide to building modern applications.', 'Covers dependency injection, microservices, security, and testing.', 'PUBLISHED', 'English', 99.99, 79.99),
+    (course_ids[2], 'Introduction to PostgreSQL', 'introduction-to-postgresql', 'Learn the fundamentals of the world''s most advanced open source database.', 'SQL basics, data types, and simple queries for beginners.', 'PUBLISHED', 'English', 49.99, 29.99),
+    (course_ids[3], 'Advanced Docker and Kubernetes', 'advanced-docker-kubernetes', 'Deploy and manage containerized applications at scale.', 'Deep dive into orchestration, networking, and storage.', 'PUBLISHED', 'English', 149.99, 119.99),
+    (course_ids[4], 'React for Beginners', 'react-for-beginners', 'Build modern, interactive user interfaces with React.', 'Learn components, state, props, and hooks from scratch.', 'PUBLISHED', 'English', 79.99, 59.99),
     (course_ids[5], 'Data Structures and Algorithms in Java', 'data-structures-algorithms-java', 'Master the essential concepts for coding interviews.', 'Covers arrays, linked lists, trees, graphs, and sorting algorithms.', 'APPROVED', 'English', 89.99, 69.99),
     (course_ids[6], 'Building RESTful APIs with Node.js', 'restful-apis-nodejs', 'Create fast and scalable backend services.', 'Using Express.js, MongoDB, and best practices.', 'IN_PROGRESS', 'English', 69.99, 49.99),
     (course_ids[7], 'Machine Learning with Python', 'machine-learning-python', 'An introduction to practical machine learning.', 'Using Scikit-learn, Pandas, and NumPy.', 'IN_PROGRESS', 'English', 129.99, 99.99),
@@ -84,51 +84,65 @@ BEGIN
     (chapter_ids[19], course_ids[5], 'Chapter 3: Trees', 'Binary Search Trees.'),
     (chapter_ids[20], course_ids[5], 'Chapter 4: Sorting', 'Bubble, Merge, and Quick sort.');
 
-    -- 5. SEED LESSONS (40 records)
-    -- Note: 'duration' column is removed.
-    INSERT INTO lessons (id, chapter_id, course_id, title, slug, content, "position") VALUES
-    (lesson_ids[1], chapter_ids[1], course_ids[1], 'Lesson 1.1: Inversion of Control', 'spring-ioc', 'Content about IoC.', 1),
-    (lesson_ids[2], chapter_ids[1], course_ids[1], 'Lesson 1.2: The Bean Lifecycle', 'spring-bean-lifecycle', 'Content about beans.', 2),
-    (lesson_ids[3], chapter_ids[2], course_ids[1], 'Lesson 2.1: @RestController', 'spring-restcontroller', 'Content about controllers.', 1),
-    (lesson_ids[4], chapter_ids[2], course_ids[1], 'Lesson 2.2: @RequestMapping', 'spring-requestmapping', 'Content about mappings.', 2),
-    (lesson_ids[5], chapter_ids[3], course_ids[1], 'Lesson 3.1: JPA and Hibernate', 'spring-jpa', 'Content about JPA.', 1),
-    (lesson_ids[6], chapter_ids[3], course_ids[1], 'Lesson 3.2: Spring Data Repositories', 'spring-data-repo', 'Content about repositories.', 2),
-    (lesson_ids[7], chapter_ids[4], course_ids[1], 'Lesson 4.1: Basic Authentication', 'spring-security-basic', 'Content about basic auth.', 1),
-    (lesson_ids[8], chapter_ids[4], course_ids[1], 'Lesson 4.2: JWT Authentication', 'spring-security-jwt', 'Content about JWT.', 2),
-    (lesson_ids[9], chapter_ids[5], course_ids[2], 'Lesson 1.1: The SELECT statement', 'sql-select', 'How to query data.', 1),
-    (lesson_ids[10], chapter_ids[5], course_ids[2], 'Lesson 1.2: The WHERE clause', 'sql-where', 'How to filter data.', 2),
-    (lesson_ids[11], chapter_ids[6], course_ids[2], 'Lesson 2.1: INNER JOIN', 'sql-inner-join', 'Combining two tables.', 1),
-    (lesson_ids[12], chapter_ids[6], course_ids[2], 'Lesson 2.2: LEFT JOIN', 'sql-left-join', 'Keeping all records from the left table.', 2),
-    (lesson_ids[13], chapter_ids[7], course_ids[2], 'Lesson 3.1: COUNT()', 'sql-count', 'Counting rows.', 1),
-    (lesson_ids[14], chapter_ids[7], course_ids[2], 'Lesson 3.2: GROUP BY', 'sql-group-by', 'Aggregating data.', 2),
-    (lesson_ids[15], chapter_ids[8], course_ids[2], 'Lesson 4.1: VARCHAR and TEXT', 'sql-text-types', 'Storing string data.', 1),
-    (lesson_ids[16], chapter_ids[8], course_ids[2], 'Lesson 4.2: INTEGER and DECIMAL', 'sql-numeric-types', 'Storing numeric data.', 2),
-    (lesson_ids[17], chapter_ids[9], course_ids[3], 'Lesson 1.1: What is a Container?', 'docker-container', 'Container concepts.', 1),
-    (lesson_ids[18], chapter_ids[9], course_ids[3], 'Lesson 1.2: Dockerfile Basics', 'docker-dockerfile', 'Building images.', 2),
-    (lesson_ids[19], chapter_ids[10], course_ids[3], 'Lesson 2.1: docker-compose.yml', 'docker-compose-file', 'Defining services.', 1),
-    (lesson_ids[20], chapter_ids[10], course_ids[3], 'Lesson 2.2: Networking', 'docker-compose-networking', 'Connecting containers.', 2),
-    (lesson_ids[21], chapter_ids[11], course_ids[3], 'Lesson 3.1: Pods', 'k8s-pods', 'The smallest deployable units.', 1),
-    (lesson_ids[22], chapter_ids[11], course_ids[3], 'Lesson 3.2: Services', 'k8s-services', 'Exposing applications.', 2),
-    (lesson_ids[23], chapter_ids[12], course_ids[3], 'Lesson 4.1: What is Helm?', 'helm-intro', 'The package manager for Kubernetes.', 1),
-    (lesson_ids[24], chapter_ids[12], course_ids[3], 'Lesson 4.2: Creating a Chart', 'helm-create-chart', 'Packaging your app.', 2),
-    (lesson_ids[25], chapter_ids[13], course_ids[4], 'Lesson 1.1: Functional Components', 'react-functional-components', 'Modern React components.', 1),
-    (lesson_ids[26], chapter_ids[13], course_ids[4], 'Lesson 1.2: Class Components', 'react-class-components', 'Older React components.', 2),
-    (lesson_ids[27], chapter_ids[14], course_ids[4], 'Lesson 2.1: Lifting State Up', 'react-lifting-state', 'Sharing state.', 1),
-    (lesson_ids[28], chapter_ids[14], course_ids[4], 'Lesson 2.2: Props Drilling', 'react-props-drilling', 'Passing data down.', 2),
-    (lesson_ids[29], chapter_ids[15], course_ids[4], 'Lesson 3.1: onClick', 'react-onclick', 'Handling clicks.', 1),
-    (lesson_ids[30], chapter_ids[15], course_ids[4], 'Lesson 3.2: onChange', 'react-onchange', 'Handling input changes.', 2),
-    (lesson_ids[31], chapter_ids[16], course_ids[4], 'Lesson 4.1: useState', 'react-usestate', 'Managing local state.', 1),
-    (lesson_ids[32], chapter_ids[16], course_ids[4], 'Lesson 4.2: useEffect', 'react-useeffect', 'Handling side effects.', 2),
-    (lesson_ids[33], chapter_ids[17], course_ids[5], 'Lesson 1.1: Big O Notation', 'big-o-notation', 'Analyzing complexity.', 1),
-    (lesson_ids[34], chapter_ids[17], course_ids[5], 'Lesson 1.2: Dynamic Arrays', 'dynamic-arrays', 'How ArrayLists work.', 2),
-    (lesson_ids[35], chapter_ids[18], course_ids[5], 'Lesson 2.1: List Operations', 'linked-list-ops', 'Add, remove, find.', 1),
-    (lesson_ids[36], chapter_ids[18], course_ids[5], 'Lesson 2.2: Runner Technique', 'linked-list-runner', 'Solving problems with two pointers.', 2),
-    (lesson_ids[37], chapter_ids[19], course_ids[5], 'Lesson 3.1: Traversal', 'tree-traversal', 'In-order, pre-order, post-order.', 1),
-    (lesson_ids[38], chapter_ids[19], course_ids[5], 'Lesson 3.2: Insertion', 'tree-insertion', 'Adding nodes to a BST.', 2),
-    (lesson_ids[39], chapter_ids[20], course_ids[5], 'Lesson 4.1: Merge Sort', 'merge-sort', 'A divide and conquer algorithm.', 1),
-    (lesson_ids[40], chapter_ids[20], course_ids[5], 'Lesson 4.2: Quick Sort', 'quick-sort', 'Using a pivot to sort.', 2);
+    -- 5. SEED QUIZZES (20 records) - Create quizzes first
+    -- Note: 'lesson_id', 'course_id', 'passing_percentage' columns are removed.
+    INSERT INTO quizzes (id, title) VALUES
+    (quiz_ids[1], 'Quiz: Spring IoC'), (quiz_ids[2], 'Quiz: Bean Lifecycle'),
+    (quiz_ids[3], 'Quiz: @RestController'), (quiz_ids[4], 'Quiz: @RequestMapping'),
+    (quiz_ids[5], 'Quiz: JPA Basics'), (quiz_ids[6], 'Quiz: Spring Data'),
+    (quiz_ids[7], 'Quiz: Basic Auth'), (quiz_ids[8], 'Quiz: JWT Auth'),
+    (quiz_ids[9], 'Quiz: SELECT Statement'), (quiz_ids[10], 'Quiz: WHERE Clause'),
+    (quiz_ids[11], 'Quiz: INNER JOIN'), (quiz_ids[12], 'Quiz: LEFT JOIN'),
+    (quiz_ids[13], 'Quiz: COUNT()'), (quiz_ids[14], 'Quiz: GROUP BY'),
+    (quiz_ids[15], 'Quiz: Text Types'), (quiz_ids[16], 'Quiz: Numeric Types'),
+    (quiz_ids[17], 'Quiz: Containers'), (quiz_ids[18], 'Quiz: Dockerfiles'),
+    (quiz_ids[19], 'Quiz: Docker Compose'), (quiz_ids[20], 'Quiz: K8s Pods');
 
-    -- 6. SEED ENROLLMENTS (20 records)
+    -- 6. SEED LESSONS (40 records)
+    -- Note: 'duration' column is removed.
+    INSERT INTO lessons (id, chapter_id, course_id, title, slug, content, "position", quiz_id) VALUES
+    (lesson_ids[1], chapter_ids[1], course_ids[1], 'Lesson 1.1: Inversion of Control', 'spring-ioc', 'Content about IoC.', 1, quiz_ids[1]),
+    (lesson_ids[2], chapter_ids[1], course_ids[1], 'Lesson 1.2: The Bean Lifecycle', 'spring-bean-lifecycle', 'Content about beans.', 2, quiz_ids[2]),
+    (lesson_ids[3], chapter_ids[2], course_ids[1], 'Lesson 2.1: @RestController', 'spring-restcontroller', 'Content about controllers.', 1, quiz_ids[3]),
+    (lesson_ids[4], chapter_ids[2], course_ids[1], 'Lesson 2.2: @RequestMapping', 'spring-requestmapping', 'Content about mappings.', 2, quiz_ids[4]),
+    (lesson_ids[5], chapter_ids[3], course_ids[1], 'Lesson 3.1: JPA and Hibernate', 'spring-jpa', 'Content about JPA.', 1, quiz_ids[5]),
+    (lesson_ids[6], chapter_ids[3], course_ids[1], 'Lesson 3.2: Spring Data Repositories', 'spring-data-repo', 'Content about repositories.', 2, quiz_ids[6]),
+    (lesson_ids[7], chapter_ids[4], course_ids[1], 'Lesson 4.1: Basic Authentication', 'spring-security-basic', 'Content about basic auth.', 1, quiz_ids[7]),
+    (lesson_ids[8], chapter_ids[4], course_ids[1], 'Lesson 4.2: JWT Authentication', 'spring-security-jwt', 'Content about JWT.', 2, quiz_ids[8]),
+    (lesson_ids[9], chapter_ids[5], course_ids[2], 'Lesson 1.1: The SELECT statement', 'sql-select', 'How to query data.', 1, quiz_ids[9]),
+    (lesson_ids[10], chapter_ids[5], course_ids[2], 'Lesson 1.2: The WHERE clause', 'sql-where', 'How to filter data.', 2, quiz_ids[10]),
+    (lesson_ids[11], chapter_ids[6], course_ids[2], 'Lesson 2.1: INNER JOIN', 'sql-inner-join', 'Combining two tables.', 1, quiz_ids[11]),
+    (lesson_ids[12], chapter_ids[6], course_ids[2], 'Lesson 2.2: LEFT JOIN', 'sql-left-join', 'Keeping all records from the left table.', 2, quiz_ids[12]),
+    (lesson_ids[13], chapter_ids[7], course_ids[2], 'Lesson 3.1: COUNT()', 'sql-count', 'Counting rows.', 1, quiz_ids[13]),
+    (lesson_ids[14], chapter_ids[7], course_ids[2], 'Lesson 3.2: GROUP BY', 'sql-group-by', 'Aggregating data.', 2, quiz_ids[14]),
+    (lesson_ids[15], chapter_ids[8], course_ids[2], 'Lesson 4.1: VARCHAR and TEXT', 'sql-text-types', 'Storing string data.', 1, quiz_ids[15]),
+    (lesson_ids[16], chapter_ids[8], course_ids[2], 'Lesson 4.2: INTEGER and DECIMAL', 'sql-numeric-types', 'Storing numeric data.', 2, quiz_ids[16]),
+    (lesson_ids[17], chapter_ids[9], course_ids[3], 'Lesson 1.1: What is a Container?', 'docker-container', 'Container concepts.', 1, quiz_ids[17]),
+    (lesson_ids[18], chapter_ids[9], course_ids[3], 'Lesson 1.2: Dockerfile Basics', 'docker-dockerfile', 'Building images.', 2, quiz_ids[18]),
+    (lesson_ids[19], chapter_ids[10], course_ids[3], 'Lesson 2.1: docker-compose.yml', 'docker-compose-file', 'Defining services.', 1, quiz_ids[19]),
+    (lesson_ids[20], chapter_ids[10], course_ids[3], 'Lesson 2.2: Networking', 'docker-compose-networking', 'Connecting containers.', 2, quiz_ids[20]),
+    (lesson_ids[21], chapter_ids[11], course_ids[3], 'Lesson 3.1: Pods', 'k8s-pods', 'The smallest deployable units.', 1, NULL),
+    (lesson_ids[22], chapter_ids[11], course_ids[3], 'Lesson 3.2: Services', 'k8s-services', 'Exposing applications.', 2, NULL),
+    (lesson_ids[23], chapter_ids[12], course_ids[3], 'Lesson 4.1: What is Helm?', 'helm-intro', 'The package manager for Kubernetes.', 1, NULL),
+    (lesson_ids[24], chapter_ids[12], course_ids[3], 'Lesson 4.2: Creating a Chart', 'helm-create-chart', 'Packaging your app.', 2, NULL),
+    (lesson_ids[25], chapter_ids[13], course_ids[4], 'Lesson 1.1: Functional Components', 'react-functional-components', 'Modern React components.', 1, NULL),
+    (lesson_ids[26], chapter_ids[13], course_ids[4], 'Lesson 1.2: Class Components', 'react-class-components', 'Older React components.', 2, NULL),
+    (lesson_ids[27], chapter_ids[14], course_ids[4], 'Lesson 2.1: Lifting State Up', 'react-lifting-state', 'Sharing state.', 1, NULL),
+    (lesson_ids[28], chapter_ids[14], course_ids[4], 'Lesson 2.2: Props Drilling', 'react-props-drilling', 'Passing data down.', 2, NULL),
+    (lesson_ids[29], chapter_ids[15], course_ids[4], 'Lesson 3.1: onClick', 'react-onclick', 'Handling clicks.', 1, NULL),
+    (lesson_ids[30], chapter_ids[15], course_ids[4], 'Lesson 3.2: onChange', 'react-onchange', 'Handling input changes.', 2, NULL),
+    (lesson_ids[31], chapter_ids[16], course_ids[4], 'Lesson 4.1: useState', 'react-usestate', 'Managing local state.', 1, NULL),
+    (lesson_ids[32], chapter_ids[16], course_ids[4], 'Lesson 4.2: useEffect', 'react-useeffect', 'Handling side effects.', 2, NULL),
+    (lesson_ids[33], chapter_ids[17], course_ids[5], 'Lesson 1.1: Big O Notation', 'big-o-notation', 'Analyzing complexity.', 1, NULL),
+    (lesson_ids[34], chapter_ids[17], course_ids[5], 'Lesson 1.2: Dynamic Arrays', 'dynamic-arrays', 'How ArrayLists work.', 2, NULL),
+    (lesson_ids[35], chapter_ids[18], course_ids[5], 'Lesson 2.1: List Operations', 'linked-list-ops', 'Add, remove, find.', 1, NULL),
+    (lesson_ids[36], chapter_ids[18], course_ids[5], 'Lesson 2.2: Runner Technique', 'linked-list-runner', 'Solving problems with two pointers.', 2, NULL),
+    (lesson_ids[37], chapter_ids[19], course_ids[5], 'Lesson 3.1: Traversal', 'tree-traversal', 'In-order, pre-order, post-order.', 1, NULL),
+    (lesson_ids[38], chapter_ids[19], course_ids[5], 'Lesson 3.2: Insertion', 'tree-insertion', 'Adding nodes to a BST.', 2, NULL),
+    (lesson_ids[39], chapter_ids[20], course_ids[5], 'Lesson 4.1: Merge Sort', 'merge-sort', 'A divide and conquer algorithm.', 1, NULL),
+    (lesson_ids[40], chapter_ids[20], course_ids[5], 'Lesson 4.2: Quick Sort', 'quick-sort', 'Using a pivot to sort.', 2, NULL);
+
+    -- 7. SEED ENROLLMENTS (20 records)
     INSERT INTO enrollments (member_id, course_id, member_type, role) VALUES
     (student1_id, course_ids[1], 'STUDENT', 'MEMBER'), (student1_id, course_ids[2], 'STUDENT', 'MEMBER'), (student1_id, course_ids[3], 'STUDENT', 'MEMBER'), (student1_id, course_ids[4], 'STUDENT', 'MEMBER'),
     (student2_id, course_ids[1], 'STUDENT', 'MEMBER'), (student2_id, course_ids[2], 'STUDENT', 'MEMBER'), (student2_id, course_ids[3], 'STUDENT', 'MEMBER'), (student2_id, course_ids[5], 'STUDENT', 'MEMBER'),
@@ -142,7 +156,7 @@ BEGIN
     (instructor_id, course_ids[4], 'STUDENT', 'MEMBER'),
     (instructor_id, course_ids[5], 'STUDENT', 'MEMBER');
 
-    -- 7. SEED COURSE PROGRESS (20+ records)
+    -- 8. SEED COURSE PROGRESS (20+ records)
     INSERT INTO course_progress (member_id, lesson_id, chapter_id, course_id, status) VALUES
     (student1_id, lesson_ids[1], chapter_ids[1], course_ids[1], 'COMPLETE'), (student1_id, lesson_ids[2], chapter_ids[1], course_ids[1], 'COMPLETE'),
     (student1_id, lesson_ids[3], chapter_ids[2], course_ids[1], 'INCOMPLETE'),
@@ -157,20 +171,6 @@ BEGIN
     (student1_id, lesson_ids[25], chapter_ids[13], course_ids[4], 'COMPLETE'),
     (student2_id, lesson_ids[25], chapter_ids[13], course_ids[4], 'COMPLETE'),
     (student3_id, lesson_ids[25], chapter_ids[13], course_ids[4], 'COMPLETE');
-
-    -- 8. SEED QUIZZES (20 records)
-    -- Note: 'lesson_id', 'course_id', 'passing_percentage' columns are removed.
-    INSERT INTO quizzes (id, title) VALUES
-    (quiz_ids[1], 'Quiz: Spring IoC'), (quiz_ids[2], 'Quiz: Bean Lifecycle'),
-    (quiz_ids[3], 'Quiz: @RestController'), (quiz_ids[4], 'Quiz: @RequestMapping'),
-    (quiz_ids[5], 'Quiz: JPA Basics'), (quiz_ids[6], 'Quiz: Spring Data'),
-    (quiz_ids[7], 'Quiz: Basic Auth'), (quiz_ids[8], 'Quiz: JWT Auth'),
-    (quiz_ids[9], 'Quiz: SELECT Statement'), (quiz_ids[10], 'Quiz: WHERE Clause'),
-    (quiz_ids[11], 'Quiz: INNER JOIN'), (quiz_ids[12], 'Quiz: LEFT JOIN'),
-    (quiz_ids[13], 'Quiz: COUNT()'), (quiz_ids[14], 'Quiz: GROUP BY'),
-    (quiz_ids[15], 'Quiz: Text Types'), (quiz_ids[16], 'Quiz: Numeric Types'),
-    (quiz_ids[17], 'Quiz: Containers'), (quiz_ids[18], 'Quiz: Dockerfiles'),
-    (quiz_ids[19], 'Quiz: Docker Compose'), (quiz_ids[20], 'Quiz: K8s Pods');
 
     -- 9. SEED QUIZ QUESTIONS (40 records)
     INSERT INTO quiz_questions (id, quiz_id, question, type, options, correct_answer, marks) VALUES

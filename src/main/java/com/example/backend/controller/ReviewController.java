@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1")
 @RequiredArgsConstructor
 @Tag(name = "Reviews", description = "Course review management APIs")
 public class ReviewController {
