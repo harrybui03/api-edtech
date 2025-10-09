@@ -1,5 +1,9 @@
 version: '3.8'
 
+networks:
+  lms_network:
+    driver: bridge
+
 services:
   # RabbitMQ Service
   rabbitmq:
@@ -17,6 +21,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - lms_network
 
   db:
     image: postgres:13
@@ -34,6 +40,8 @@ services:
       retries: 20
     volumes:
       - db_data:/var/lib/postgresql/data
+    networks:
+      - lms_network
 
   minio:
     image: minio/minio:RELEASE.2023-09-04T19-57-37Z
@@ -52,6 +60,8 @@ services:
       retries: 5
     volumes:
       - minio_data:/data
+    networks:
+      - lms_network
 
 volumes:
   db_data:
