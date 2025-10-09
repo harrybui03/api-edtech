@@ -54,6 +54,9 @@ CREATE TABLE courses (
     lessons INTEGER DEFAULT 0,
     rating DECIMAL(3,2) DEFAULT 0,
     language VARCHAR(50),
+    target_audience TEXT,
+    skill_level TEXT,
+    learner_profile_desc TEXT,
     creation TIMESTAMPTZ DEFAULT NOW(),
     modified TIMESTAMPTZ DEFAULT NOW(),
     modified_by UUID

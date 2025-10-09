@@ -7,7 +7,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.UUID;
@@ -42,14 +41,7 @@ public class Course {
     private String videoLink;
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "course_status_enum default 'DRAFT'")
     private CourseStatus status;
-
-    @Column
-    private Boolean published;
-
-    @Column(name = "published_on")
-    private LocalDate publishedOn;
 
     @Column(name = "paid_course")
     private Boolean paidCourse;
@@ -66,13 +58,6 @@ public class Course {
     @Column(name = "amount_usd")
     private BigDecimal amountUsd;
 
-    @Column(name = "enable_certification")
-    private Boolean enableCertification;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "evaluator")
-    private User evaluator;
-
     @Column
     private Integer enrollments;
 
@@ -84,6 +69,15 @@ public class Course {
 
     @Column
     private String language;
+
+    @Column(name = "target_audience")
+    private String targetAudience;
+
+    @Column(name = "skill_level")
+    private String skillLevel;
+
+    @Column(name = "learner_profile_desc")
+    private String learnerProfileDesc;
 
     @CreationTimestamp
     @Column(name = "creation", nullable = false, updatable = false)
