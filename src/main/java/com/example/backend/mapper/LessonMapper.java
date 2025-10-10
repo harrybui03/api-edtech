@@ -23,6 +23,8 @@ public class LessonMapper {
         dto.setTitle(lesson.getTitle());
         dto.setSlug(lesson.getSlug());
         dto.setContent(lesson.getContent());
+        dto.setQuizDto(QuizMapper.toDto(lesson.getQuiz()));
+
 
         if (StringUtils.hasText(lesson.getVideoUrl())) {
             dto.setVideoUrl(fileUploadService.generatePresignedGetUrl(lesson.getVideoUrl()));
@@ -32,7 +34,6 @@ public class LessonMapper {
             dto.setFileUrl(fileUploadService.generatePresignedGetUrl(lesson.getFileUrl()));
         }
 
-        dto.setDuration(lesson.getDuration());
         dto.setPosition(lesson.getPosition());
         return dto;
     }
@@ -43,7 +44,6 @@ public class LessonMapper {
         lesson.setContent(request.getContent());
         lesson.setVideoUrl(request.getVideoUrl());
         lesson.setFileUrl(request.getFileUrl());
-        lesson.setDuration(request.getDuration());
         return lesson;
     }
 
@@ -52,6 +52,5 @@ public class LessonMapper {
         lesson.setContent(request.getContent());
         lesson.setVideoUrl(request.getVideoUrl());
         lesson.setFileUrl(request.getFileUrl());
-        lesson.setDuration(request.getDuration());
     }
 }

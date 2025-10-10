@@ -36,7 +36,6 @@ public class ProgressMapper {
                                         .lessonTitle(lesson.getTitle())
                                         .status(progress != null ? progress.getStatus() : CourseProgressStatus.INCOMPLETE)
                                         .completedAt(progress != null ? progress.getModified() : null)
-                                        .duration(lesson.getDuration())
                                         .videoUrl(lesson.getVideoUrl())
                                         .build();
                             })

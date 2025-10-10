@@ -9,6 +9,7 @@ public class ChapterDto {
     private UUID id;
     private String title;
     private String summary;
+    private String slug;
     private Integer position;
     private List<LessonDto> lessons;
 }

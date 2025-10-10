@@ -43,19 +43,19 @@ public class CourseMapper {
 
         dto.setVideoLink(course.getVideoLink());
         dto.setStatus(course.getStatus());
-        dto.setPublished(course.getPublished());
-        dto.setPublishedOn(course.getPublishedOn());
         dto.setCoursePrice(course.getCoursePrice());
         dto.setSellingPrice(course.getSellingPrice());
         dto.setCurrency(course.getCurrency());
         dto.setAmountUsd(course.getAmountUsd());
-        dto.setEnableCertification(course.getEnableCertification());
         dto.setEnrollments(course.getEnrollments());
         dto.setLessons(course.getLessons());
         dto.setRating(course.getRating());
         dto.setLanguage(course.getLanguage());
         dto.setTags(toTagDtoList(tags));
         dto.setLabels(toLabelDtoList(labels));
+        dto.setTargetAudience(course.getTargetAudience());
+        dto.setSkillLevel(course.getSkillLevel());
+        dto.setLearnerProfileDesc(course.getLearnerProfileDesc());
         if (course.getChapters() != null) {
             List<ChapterDto> chapterDtos = course.getChapters().stream()
                     .sorted(Comparator.comparing(Chapter::getPosition, Comparator.nullsLast(Comparator.naturalOrder())))
@@ -103,7 +103,6 @@ public class CourseMapper {
                 .sellingPrice(request.getSellingPrice())
                 .currency(request.getCurrency())
                 .amountUsd(request.getAmountUsd())
-                .enableCertification(request.getEnableCertification())
                 .language(request.getLanguage())
                 .build();
     }
@@ -122,7 +121,6 @@ public class CourseMapper {
         course.setSellingPrice(request.getSellingPrice());
         course.setCurrency(request.getCurrency());
         course.setAmountUsd(request.getAmountUsd());
-        course.setEnableCertification(request.getEnableCertification());
         course.setLanguage(request.getLanguage());
     }
 }

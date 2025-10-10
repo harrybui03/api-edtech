@@ -30,6 +30,8 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.example.backend.util.SlugConverter.toSlug;
+
 @Service
 @RequiredArgsConstructor
 public class CourseService {
@@ -87,7 +89,6 @@ public class CourseService {
 
         Course course = CourseMapper.toEntity(request);
         course.setStatus(CourseStatus.DRAFT);
-        course.setPublished(false);
         course.setSlug(generateUniqueSlug(request.getTitle()));
 
         Course savedCourse = courseRepository.save(course);
@@ -135,13 +136,6 @@ public class CourseService {
         return slug;
     }
 
-    private String toSlug(String input) {
-        String whitespace = WHITESPACE.matcher(input).replaceAll("-");
-        String normalized = Normalizer.normalize(whitespace, Normalizer.Form.NFD);
-        String slug = NON_LATIN.matcher(normalized).replaceAll("");
-        return slug.toLowerCase(Locale.ENGLISH);
-    }
-
     private List<Tag> upsertTags(List<String> tagNames, UUID courseId) {
         if (tagNames == null || tagNames.isEmpty()) {
             return Collections.emptyList();
@@ -170,7 +164,7 @@ public class CourseService {
     public void deleteCourse(UUID courseId) {
         Course course = findCourseById(courseId);
         checkCourseOwnership(course);
-        if (course.getPublished()) {
+        if (course.getStatus().equals(CourseStatus.PUBLISHED)) {
             throw new ForbiddenException("Cannot delete a published course.");
         }
 
@@ -184,12 +178,10 @@ public class CourseService {
         Course course = findCourseById(courseId);
         checkCourseOwnership(course);
 
-        if (Boolean.TRUE.equals(course.getPublished())) {
+        if (course.getStatus().equals(CourseStatus.PUBLISHED)) {
             throw new InvalidRequestDataException("Course with id " + courseId + " is already published.");
         }
 
-        course.setPublished(true);
-        course.setPublishedOn(LocalDate.now());
         course.setStatus(CourseStatus.PUBLISHED);
         courseRepository.save(course);
     }

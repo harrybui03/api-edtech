@@ -27,6 +27,7 @@ public class ChapterMapper {
         dto.setTitle(chapter.getTitle());
         dto.setSummary(chapter.getSummary());
         dto.setPosition(chapter.getPosition());
+        dto.setSlug(chapter.getSlug());
         if (chapter.getLessons() != null) {
             List<Lesson> sortedLessons = chapter.getLessons().stream()
                     .sorted(Comparator.comparing(Lesson::getPosition, Comparator.nullsLast(Comparator.naturalOrder())))

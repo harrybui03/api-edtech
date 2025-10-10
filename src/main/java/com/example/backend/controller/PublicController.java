@@ -39,9 +39,9 @@ public class PublicController {
         return ResponseEntity.ok(courseService.getCourseBySlug(slug));
     }
 
-    @GetMapping("/courses/{courseId}/chapters")
-    public ResponseEntity<List<ChapterDto>> getCourseChapters(@PathVariable UUID courseId) {
-        return ResponseEntity.ok(chapterService.getChaptersByCourse(courseId));
+    @GetMapping("/courses/{slug}/chapters")
+    public ResponseEntity<List<ChapterDto>> getCourseChapters(@PathVariable String slug) {
+        return ResponseEntity.ok(chapterService.getChaptersByCourse(slug));
     }
 
     @GetMapping("/courses/{courseSlug}/reviews")

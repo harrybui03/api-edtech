@@ -21,6 +21,9 @@ public class CourseRequest {
     private BigDecimal amountUsd;
     private Boolean enableCertification;
     private String language;
+    private String targetAudience;
+    private String skillLevel;
+    private String learnerProfileDesc;
     private List<TagDto> tagDto;
     private List<LabelDto> labelDto;
 }

@@ -11,6 +11,6 @@ public class LessonDto {
     private String content;
     private String videoUrl;
     private String fileUrl;
-    private Integer duration;
     private Integer position;
+    private QuizDto quizDto;
 }

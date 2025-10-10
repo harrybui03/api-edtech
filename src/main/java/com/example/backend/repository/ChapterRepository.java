@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
-    @Query("SELECT c FROM Chapter c LEFT JOIN FETCH c.lessons WHERE c.course.id = :courseId ORDER BY c.position ASC")
-    List<Chapter> findByCourseIdWithLessonsOrderByPositionAsc(@Param("courseId") UUID courseId);
+    @Query("SELECT c FROM Chapter c LEFT JOIN FETCH c.lessons WHERE c.course.slug = :slug ORDER BY c.position ASC")
+    List<Chapter> findByCourseSlugWithLessonsOrderByPositionAsc(@Param("slug") String slug);
     
     List<Chapter> findByCourseIdOrderByCreation(UUID courseId);
+
+    boolean existsBySlug(String slug);
 }

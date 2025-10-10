@@ -9,10 +9,7 @@ import com.example.backend.entity.User;
 import com.example.backend.excecption.ForbiddenException;
 import com.example.backend.excecption.ResourceNotFoundException;
 import com.example.backend.mapper.LessonMapper;
-import com.example.backend.repository.ChapterRepository;
-import com.example.backend.repository.LessonRepository;
-import com.example.backend.repository.EnrollmentRepository;
-import com.example.backend.repository.UserRepository;
+import com.example.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -23,6 +20,8 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import static com.example.backend.util.SlugConverter.toSlug;
+
 @Service
 @RequiredArgsConstructor
 public class LessonService {
@@ -32,9 +31,9 @@ public class LessonService {
     private final UserRepository userRepository;
     private final LessonMapper lessonMapper;
     private final EnrollmentRepository enrollmentRepository;
+    private final QuizRepository quizRepository;
 
-    private static final Pattern NON_LATIN = Pattern.compile("[^\\w-]");
-    private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
+
 
     @Transactional(readOnly = true)
     public LessonDto getLessonBySlug(String slug) {
@@ -54,6 +53,10 @@ public class LessonService {
         lesson.setChapter(chapter);
         lesson.setCourse(chapter.getCourse());
         lesson.setSlug(generateUniqueSlug(request.getTitle()));
+        if (request.getQuizId() != null) {
+            lesson.setQuiz(quizRepository.findById(request.getQuizId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + request.getQuizId())));
+        }
 
         lesson.setPosition(currentLessonCount + 1);
 
@@ -93,13 +96,6 @@ public class LessonService {
             counter++;
         }
         return slug;
-    }
-
-    private String toSlug(String input) {
-        String whitespace = WHITESPACE.matcher(input).replaceAll("-");
-        String normalized = Normalizer.normalize(whitespace, Normalizer.Form.NFD);
-        String slug = NON_LATIN.matcher(normalized).replaceAll("");
-        return slug.toLowerCase(Locale.ENGLISH);
     }
 
     private User getCurrentUser() {
