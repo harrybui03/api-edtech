@@ -27,6 +27,13 @@ public class EnrollmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     
+    @PostMapping("/courses/slug/{courseSlug}/enroll")
+    @Operation(summary = "Enroll in a course by slug", description = "Student enrolls in a specific course using course slug (SEO)")
+    public ResponseEntity<EnrollmentResponse> enrollInCourseBySlug(@PathVariable String courseSlug) {
+        EnrollmentResponse response = enrollmentService.enrollInCourseBySlug(courseSlug);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+    
     @GetMapping("/enrollments/my-courses")
     @Operation(summary = "Get my enrolled courses", description = "Get all courses that the current user has enrolled in")
     public ResponseEntity<List<EnrollmentResponse>> getMyEnrollments() {

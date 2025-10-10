@@ -4,6 +4,7 @@ import com.example.backend.constant.CourseStatus;
 import com.example.backend.constant.EntityType;
 import com.example.backend.constant.UserRoleEnum;
 import com.example.backend.dto.model.CourseDto;
+import com.example.backend.dto.model.CoursePublicDto;
 import com.example.backend.dto.model.LabelDto;
 import com.example.backend.dto.model.TagDto;
 import com.example.backend.dto.request.course.CourseRequest;
@@ -21,13 +22,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
-import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.example.backend.util.SlugConverter.toSlug;
@@ -43,8 +40,7 @@ public class CourseService {
     private final LabelRepository labelRepository;
     private final CourseMapper courseMapper;
 
-    private static final Pattern NON_LATIN = Pattern.compile("[^\\w-]");
-    private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
+    
 
     @Transactional(readOnly = true)
     public Page<CourseDto> getPublishedCourses(Pageable pageable, List<String> tags, List<String> labels, String search) {
@@ -72,6 +68,15 @@ public class CourseService {
         List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
         List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
         return courseMapper.toDto(course, tags, labels);
+    }
+
+    @Transactional(readOnly = true)
+    public CoursePublicDto getCourseBySlugPublic(String slug) {
+        Course course = courseRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with slug: " + slug));
+        List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+        List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+        return courseMapper.toPublicDto(course, tags, labels);
     }
 
     @Transactional(readOnly = true)

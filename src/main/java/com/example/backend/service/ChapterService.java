@@ -2,6 +2,7 @@ package com.example.backend.service;
 
 import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.request.course.ChapterRequest;
+import com.example.backend.dto.model.ChapterPublicDto;
 import com.example.backend.entity.Chapter;
 import com.example.backend.entity.Course;
 import com.example.backend.entity.User;
@@ -40,6 +41,17 @@ public class ChapterService {
         List<Chapter> chapters = chapterRepository.findByCourseSlugWithLessonsOrderByPositionAsc(slug);
         return chapters.stream()
                 .map(chapterMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChapterPublicDto> getChaptersByCoursePublic(String slug) {
+        if (!courseRepository.existsBySlug(slug)) {
+            throw new ResourceNotFoundException("Course not found with slug: " + slug);
+        }
+        List<Chapter> chapters = chapterRepository.findByCourseSlugWithLessonsOrderByPositionAsc(slug);
+        return chapters.stream()
+                .map(chapterMapper::toPublicDto)
                 .collect(Collectors.toList());
     }
 

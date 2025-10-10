@@ -58,6 +58,32 @@ public class CommentService {
         return CommentMapper.toResponse(savedComment, currentUser, votes);
     }
 
+    @Transactional
+    public CommentResponse createCommentByLessonSlug(String lessonSlug, CommentRequest request) {
+        User currentUser = getCurrentUser();
+        Lesson lesson = lessonRepository.findBySlug(lessonSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with slug: " + lessonSlug));
+
+        verifyLessonAccess(lesson, currentUser.getId());
+
+        Comment comment = CommentMapper.toEntity(request);
+        comment.setLesson(lesson);
+        comment.setAuthor(currentUser);
+        comment.setModifiedBy(currentUser.getId());
+
+        if (request.getParentId() != null) {
+            Comment parentComment = findCommentById(request.getParentId());
+            if (!parentComment.getLesson().getId().equals(lesson.getId())) {
+                throw new ForbiddenException("Parent comment does not belong to this lesson");
+            }
+            comment.setParent(parentComment);
+        }
+
+        Comment savedComment = commentRepository.save(comment);
+        List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(lesson.getId());
+        return CommentMapper.toResponse(savedComment, currentUser, votes);
+    }
+
 
     @Transactional(readOnly = true)
     public Page<CommentResponse> getCommentsForLesson(UUID lessonId, Pageable pageable) {
@@ -70,6 +96,20 @@ public class CommentService {
         Page<Comment> comments = commentRepository.findRootCommentsByLessonId(lessonId, pageable);
         List<CommentVote> allVotes = commentVoteRepository.findAllVotesByLessonId(lessonId);
         
+        return comments.map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CommentResponse> getCommentsForLessonBySlug(String lessonSlug, Pageable pageable) {
+        User currentUser = getCurrentUser();
+        Lesson lesson = lessonRepository.findBySlug(lessonSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with slug: " + lessonSlug));
+
+        verifyLessonAccess(lesson, currentUser.getId());
+
+        Page<Comment> comments = commentRepository.findRootCommentsByLessonId(lesson.getId(), pageable);
+        List<CommentVote> allVotes = commentVoteRepository.findAllVotesByLessonId(lesson.getId());
+
         return comments.map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes));
     }
 
@@ -182,6 +222,9 @@ public class CommentService {
 
     private boolean isAdminUser(User user) {
         return user.getRoles().stream()
-                .anyMatch(role -> "ADMIN".equals(role.getRole().name()));
+                .anyMatch(role -> {
+                    String name = role.getRole().name();
+                    return "SYSTEM_MANAGER".equals(name) || "MODERATOR".equals(name);
+                });
     }
 }

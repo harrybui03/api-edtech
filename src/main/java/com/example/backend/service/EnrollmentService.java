@@ -71,6 +71,41 @@ public class EnrollmentService {
         
         return enrollmentMapper.toResponse(enrollment);
     }
+
+    public EnrollmentResponse enrollInCourseBySlug(String courseSlug) {
+        String studentEmail = getCurrentUserEmail();
+        log.info("Enrolling student {} in course slug {}", studentEmail, courseSlug);
+
+        User student = userRepository.findByEmail(studentEmail)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        if (enrollmentRepository.existsByMemberIdAndCourseId(student.getId(), course.getId())) {
+            throw new RuntimeException("Student is already enrolled in this course");
+        }
+
+        if (course.getStatus() != CourseStatus.PUBLISHED) {
+            throw new RuntimeException("Course is not available for enrollment");
+        }
+
+        Enrollment enrollment = new Enrollment();
+        enrollment.setMember(student);
+        enrollment.setCourse(course);
+        enrollment.setMemberType(EnrollmentMemberType.STUDENT);
+        enrollment.setRole(EnrollmentRole.MEMBER);
+        enrollment.setProgress(BigDecimal.ZERO);
+
+        enrollment = enrollmentRepository.save(enrollment);
+
+        course.setEnrollments((course.getEnrollments() != null ? course.getEnrollments() : 0) + 1);
+        courseRepository.save(course);
+
+        log.info("Successfully enrolled student {} in course slug {}", studentEmail, courseSlug);
+
+        return enrollmentMapper.toResponse(enrollment);
+    }
     
     @Transactional(readOnly = true)
     public List<EnrollmentResponse> getMyEnrollments() {

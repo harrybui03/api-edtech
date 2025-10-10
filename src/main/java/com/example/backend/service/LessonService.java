@@ -2,6 +2,7 @@ package com.example.backend.service;
 
 import com.example.backend.dto.model.LessonDto;
 import com.example.backend.dto.request.course.LessonRequest;
+import com.example.backend.dto.model.LessonPublicDto;
 import com.example.backend.entity.Chapter;
 import com.example.backend.entity.Course;
 import com.example.backend.entity.Lesson;
@@ -15,10 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
-import java.util.Locale;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 import static com.example.backend.util.SlugConverter.toSlug;
 
@@ -42,6 +40,13 @@ public class LessonService {
 
         checkLessonViewPermission(lesson.getCourse());
         return lessonMapper.toDto(lesson);
+    }
+
+    @Transactional(readOnly = true)
+    public LessonPublicDto getLessonBySlugPublic(String slug) {
+        Lesson lesson = lessonRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with slug: " + slug));
+        return lessonMapper.toPublicDto(lesson);
     }
 
     @Transactional

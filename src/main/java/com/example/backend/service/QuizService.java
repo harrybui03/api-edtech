@@ -29,6 +29,7 @@ public class QuizService {
     private final QuizRepository quizRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizSubmissionRepository quizSubmissionRepository;
+    private final LessonRepository lessonRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
@@ -174,6 +175,39 @@ public class QuizService {
         }
 
         return QuizSubmissionMapper.toResponse(submission);
+    }
+
+    @Transactional(readOnly = true)
+    public List<QuizSubmissionResponse> getCourseQuizSubmissions(UUID courseId) {
+        // find lessons by course to derive quiz ids
+        List<Lesson> lessons = lessonRepository.findByCourseId(courseId);
+        if (lessons.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<UUID> quizIds = new HashSet<>();
+        for (Lesson lesson : lessons) {
+            Quiz quiz = lesson.getQuiz();
+            if (quiz != null && quiz.getId() != null) {
+                quizIds.add(quiz.getId());
+            }
+        }
+
+        if (quizIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // fetch submissions for all quizzes in this course
+        List<QuizSubmission> submissions = new ArrayList<>();
+        for (UUID quizId : quizIds) {
+            submissions.addAll(quizSubmissionRepository.findByQuizIdOrderByCreationDesc(quizId));
+        }
+
+        List<QuizSubmissionResponse> responses = new ArrayList<>(submissions.size());
+        for (QuizSubmission submission : submissions) {
+            responses.add(QuizSubmissionMapper.toResponse(submission));
+        }
+        return responses;
     }
 
     private Map<String, Object> calculateScore(List<QuizQuestion> questions, Map<UUID, String> answers, Quiz quiz) {

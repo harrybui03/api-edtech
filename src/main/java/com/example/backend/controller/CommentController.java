@@ -25,7 +25,7 @@ public class CommentController {
     private final CommentService commentService;
 
     @PostMapping("/lessons/{lessonId}/comments")
-    @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
     @Operation(summary = "Create comment", description = "Create a comment on a lesson. Include parentId in request body to create a reply to existing comment.")
     public ResponseEntity<CommentResponse> createComment(
             @PathVariable UUID lessonId,
@@ -35,7 +35,7 @@ public class CommentController {
     }
 
     @GetMapping("/lessons/{lessonId}/comments")
-    @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
     @Operation(summary = "Get lesson comments", description = "Get all comments for a lesson with threading")
     public ResponseEntity<Page<CommentResponse>> getCommentsForLesson(
             @PathVariable UUID lessonId,
@@ -44,8 +44,28 @@ public class CommentController {
         return ResponseEntity.ok(comments);
     }
 
+    @PostMapping("/lessons/slug/{lessonSlug}/comments")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
+    @Operation(summary = "Create comment by lesson slug", description = "Create a comment using lesson slug (SEO)")
+    public ResponseEntity<CommentResponse> createCommentByLessonSlug(
+            @PathVariable String lessonSlug,
+            @Valid @RequestBody CommentRequest request) {
+        CommentResponse comment = commentService.createCommentByLessonSlug(lessonSlug, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(comment);
+    }
+
+    @GetMapping("/lessons/slug/{lessonSlug}/comments")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
+    @Operation(summary = "Get lesson comments by slug", description = "Get comments for a lesson using lesson slug")
+    public ResponseEntity<Page<CommentResponse>> getCommentsForLessonBySlug(
+            @PathVariable String lessonSlug,
+            Pageable pageable) {
+        Page<CommentResponse> comments = commentService.getCommentsForLessonBySlug(lessonSlug, pageable);
+        return ResponseEntity.ok(comments);
+    }
+
     @PutMapping("/comments/{commentId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
     @Operation(summary = "Update comment", description = "Update own comment content")
     public ResponseEntity<CommentResponse> updateComment(
             @PathVariable UUID commentId,
@@ -55,7 +75,7 @@ public class CommentController {
     }
 
     @DeleteMapping("/comments/{commentId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR', 'SYSTEM_MANAGER', 'MODERATOR')")
     @Operation(summary = "Delete comment", description = "Delete a comment (soft delete)")
     public ResponseEntity<Void> deleteComment(@PathVariable UUID commentId) {
         commentService.deleteComment(commentId);
@@ -63,7 +83,7 @@ public class CommentController {
     }
 
     @PostMapping("/comments/{commentId}/vote")
-    @PreAuthorize("hasAnyRole('STUDENT', 'INSTRUCTOR')")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
     @Operation(summary = "Vote on comment", description = "Add, change, or toggle vote on a comment (UPVOTE or DOWNVOTE)")
     public ResponseEntity<CommentResponse> voteComment(
             @PathVariable UUID commentId,

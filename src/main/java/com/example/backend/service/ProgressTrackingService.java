@@ -28,6 +28,7 @@ public class ProgressTrackingService {
     private final UserRepository userRepository;
     private final LessonRepository lessonRepository;
     private final ChapterRepository chapterRepository;
+    private final CourseRepository courseRepository;
     private final ProgressMapper progressMapper;
     
     public void markLessonCompleted(String studentEmail, UUID lessonId) {
@@ -108,6 +109,87 @@ public class ProgressTrackingService {
         );
     }
     
+    public void markLessonCompletedBySlug(String studentEmail, String lessonSlug) {
+        log.info("Marking lesson {} as completed for student {}", lessonSlug, studentEmail);
+        
+        // Validate student and lesson
+        User student = userRepository.findByEmail(studentEmail)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+        
+        Lesson lesson = lessonRepository.findBySlug(lessonSlug)
+                .orElseThrow(() -> new RuntimeException("Lesson not found"));
+        
+        // Check if student is enrolled in the course
+        if (!enrollmentRepository.existsByMemberIdAndCourseId(student.getId(), lesson.getCourse().getId())) {
+            throw new RuntimeException("Student is not enrolled in this course");
+        }
+        
+        // Check if progress already exists
+        CourseProgress progress = courseProgressRepository
+                .findByMemberIdAndLessonId(student.getId(), lesson.getId())
+                .orElse(new CourseProgress());
+        
+        // Update or create progress
+        if (progress.getId() == null) {
+            progress.setMember(student);
+            progress.setLesson(lesson);
+            progress.setChapter(lesson.getChapter());
+            progress.setCourse(lesson.getCourse());
+        }
+        
+        progress.setStatus(CourseProgressStatus.COMPLETE);
+        courseProgressRepository.save(progress);
+        
+        // Update enrollment progress
+        updateEnrollmentProgress(student.getId(), lesson.getCourse().getId());
+        
+        log.info("Successfully marked lesson {} as completed for student {}", lessonSlug, studentEmail);
+    }
+    
+    @Transactional(readOnly = true)
+    public CourseProgressResponse getCourseProgressBySlug(String studentEmail, String courseSlug) {
+        log.info("Getting course progress for student {} in course slug {}", studentEmail, courseSlug);
+        
+        User student = userRepository.findByEmail(studentEmail)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+        
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+        
+        // Validate enrollment
+        Enrollment enrollment = enrollmentRepository.findByMemberIdAndCourseId(student.getId(), course.getId())
+                .orElseThrow(() -> new RuntimeException("Student is not enrolled in this course"));
+        
+        // Get all progress for this course
+        List<CourseProgress> progressList = courseProgressRepository.findByMemberIdAndCourseId(student.getId(), course.getId());
+        Map<UUID, CourseProgress> progressMap = progressList.stream()
+                .collect(Collectors.toMap(cp -> cp.getLesson().getId(), cp -> cp));
+        
+        // Get all chapters and lessons for this course
+        List<Chapter> chapters = chapterRepository.findByCourseIdOrderByCreation(course.getId());
+        
+        // Group lessons by chapter
+        Map<UUID, List<Lesson>> lessonsByChapter = chapters.stream()
+                .collect(Collectors.toMap(
+                        Chapter::getId,
+                        chapter -> lessonRepository.findByChapterIdOrderByPosition(chapter.getId())
+                ));
+        
+        // Calculate completed and total lessons
+        long completedLessons = courseProgressRepository.countCompletedLessons(student.getId(), course.getId());
+        long totalLessons = courseProgressRepository.countTotalLessons(course.getId());
+        
+        return progressMapper.mapToCourseProgressResponse(
+                course.getId(),
+                enrollment,
+                chapters,
+                progressMap,
+                lessonsByChapter,
+                (int) completedLessons,
+                (int) totalLessons
+        );
+    }
+
     private void updateEnrollmentProgress(UUID studentId, UUID courseId) {
         Enrollment enrollment = enrollmentRepository.findByMemberIdAndCourseId(studentId, courseId)
                 .orElseThrow(() -> new RuntimeException("Enrollment not found"));

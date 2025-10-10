@@ -1,6 +1,7 @@
 package com.example.backend.mapper;
 
 import com.example.backend.dto.model.LessonDto;
+import com.example.backend.dto.model.LessonPublicDto;
 import com.example.backend.dto.request.course.LessonRequest;
 import com.example.backend.entity.Lesson;
 import com.example.backend.service.FileUploadService;
@@ -34,6 +35,18 @@ public class LessonMapper {
             dto.setFileUrl(fileUploadService.generatePresignedGetUrl(lesson.getFileUrl()));
         }
 
+        dto.setPosition(lesson.getPosition());
+        return dto;
+    }
+
+    public LessonPublicDto toPublicDto(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
+        LessonPublicDto dto = new LessonPublicDto();
+        dto.setId(lesson.getId());
+        dto.setTitle(lesson.getTitle());
+        dto.setSlug(lesson.getSlug());
         dto.setPosition(lesson.getPosition());
         return dto;
     }

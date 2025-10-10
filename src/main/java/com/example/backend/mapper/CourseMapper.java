@@ -1,6 +1,7 @@
 package com.example.backend.mapper;
 
 import com.example.backend.dto.model.CourseDto;
+import com.example.backend.dto.model.CoursePublicDto;
 import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.model.LabelDto;
 import com.example.backend.dto.model.TagDto;
@@ -68,6 +69,29 @@ public class CourseMapper {
 
     public CourseDto toDto(Course course) {
         return toDto(course, Collections.emptyList(), Collections.emptyList());
+    }
+
+    public CoursePublicDto toPublicDto(Course course, List<Tag> tags, List<Label> labels) {
+        if (course == null) {
+            return null;
+        }
+        CoursePublicDto dto = new CoursePublicDto();
+        dto.setId(course.getId());
+        dto.setTitle(course.getTitle());
+        dto.setSlug(course.getSlug());
+        dto.setShortIntroduction(course.getShortIntroduction());
+        if (StringUtils.hasText(course.getImage())) {
+            dto.setImage(fileUploadService.generatePresignedGetUrl(course.getImage()));
+        }
+        dto.setVideoLink(course.getVideoLink());
+        dto.setStatus(course.getStatus());
+        dto.setEnrollments(course.getEnrollments());
+        dto.setLessons(course.getLessons());
+        dto.setRating(course.getRating() != null ? course.getRating().doubleValue() : null);
+        dto.setLanguage(course.getLanguage());
+        dto.setTags(toTagDtoList(tags));
+        dto.setLabels(toLabelDtoList(labels));
+        return dto;
     }
 
     private List<TagDto> toTagDtoList(List<Tag> tags) {
