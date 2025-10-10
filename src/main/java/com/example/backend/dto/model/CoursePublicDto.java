@@ -2,6 +2,7 @@ package com.example.backend.dto.model;
 
 import com.example.backend.constant.CourseStatus;
 import lombok.Data;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -11,15 +12,18 @@ public class CoursePublicDto {
     private String title;
     private String slug;
     private String shortIntroduction;
+    private String description;
     private String image;
-    private String videoLink;
     private CourseStatus status;
+    private BigDecimal sellingPrice;
+    private String currency;
     private Integer enrollments;
     private Integer lessons;
     private Double rating;
     private String language;
     private List<TagDto> tags;
     private List<LabelDto> labels;
+    private List<InstructorDto> instructors;
 }
 
 

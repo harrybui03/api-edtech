@@ -5,6 +5,7 @@ import com.example.backend.dto.model.CoursePublicDto;
 import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.model.LabelDto;
 import com.example.backend.dto.model.TagDto;
+import com.example.backend.dto.model.InstructorDto;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.entity.Chapter;
 import com.example.backend.entity.Course;
@@ -80,17 +81,32 @@ public class CourseMapper {
         dto.setTitle(course.getTitle());
         dto.setSlug(course.getSlug());
         dto.setShortIntroduction(course.getShortIntroduction());
+        dto.setDescription(course.getDescription());
         if (StringUtils.hasText(course.getImage())) {
             dto.setImage(fileUploadService.generatePresignedGetUrl(course.getImage()));
         }
-        dto.setVideoLink(course.getVideoLink());
         dto.setStatus(course.getStatus());
+        dto.setSellingPrice(course.getSellingPrice());
+        dto.setCurrency(course.getCurrency());
         dto.setEnrollments(course.getEnrollments());
         dto.setLessons(course.getLessons());
         dto.setRating(course.getRating() != null ? course.getRating().doubleValue() : null);
         dto.setLanguage(course.getLanguage());
         dto.setTags(toTagDtoList(tags));
         dto.setLabels(toLabelDtoList(labels));
+        
+        // Map instructors
+        if (course.getInstructors() != null) {
+            dto.setInstructors(course.getInstructors().stream()
+                    .map(ci -> new InstructorDto(
+                            ci.getUser().getId(),
+                            ci.getUser().getFullName(),
+                            ci.getUser().getEmail(),
+                            ci.getUser().getUserImage()
+                    ))
+                    .collect(Collectors.toList()));
+        }
+        
         return dto;
     }
 

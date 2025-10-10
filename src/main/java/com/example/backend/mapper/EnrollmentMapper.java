@@ -33,11 +33,13 @@ public class EnrollmentMapper {
                 .memberEmail(enrollment.getMember().getEmail())
                 .courseId(enrollment.getCourse().getId())
                 .courseTitle(enrollment.getCourse().getTitle())
+                .courseSlug(enrollment.getCourse().getSlug())
                 .memberType(enrollment.getMemberType())
                 .role(enrollment.getRole())
                 .progress(enrollment.getProgress())
                 .currentLessonId(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getId() : null)
                 .currentLessonTitle(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getTitle() : null)
+                .currentLessonSlug(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getSlug() : null)
                 .creation(enrollment.getCreation())
                 .modified(enrollment.getModified())
                 .build();

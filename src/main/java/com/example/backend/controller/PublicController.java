@@ -1,7 +1,6 @@
 package com.example.backend.controller;
 
 import com.example.backend.dto.model.ChapterPublicDto;
-import com.example.backend.dto.model.CourseDto;
 import com.example.backend.dto.model.CoursePublicDto;
 import com.example.backend.dto.model.LessonPublicDto;
 import com.example.backend.dto.response.pagination.PaginationResponse;
@@ -28,12 +27,12 @@ public class PublicController {
     private final LessonService lessonService;
 
     @GetMapping("/courses")
-    public ResponseEntity<PaginationResponse<CourseDto>> getPublishedCourses(
+    public ResponseEntity<PaginationResponse<CoursePublicDto>> getPublishedCourses(
             Pageable pageable,
             @RequestParam(required = false) List<String> tags,
             @RequestParam(required = false) List<String> labels,
             @RequestParam(required = false) String search) {
-        Page<CourseDto> courses = courseService.getPublishedCourses(pageable, tags, labels, search);
+        Page<CoursePublicDto> courses = courseService.getPublishedCourses(pageable, tags, labels, search);
         return ResponseEntity.ok(new PaginationResponse<>(courses));
     }
 

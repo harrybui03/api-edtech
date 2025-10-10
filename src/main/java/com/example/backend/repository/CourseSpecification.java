@@ -14,7 +14,7 @@ import java.util.List;
 public final class CourseSpecification {
 
     public static Specification<Course> isPublished() {
-        return (root, query, criteriaBuilder) -> criteriaBuilder.isTrue(root.get("published"));
+        return (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("status"), "PUBLISHED");
     }
 
     public static Specification<Course> titleContains(String search) {

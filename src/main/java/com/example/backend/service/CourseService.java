@@ -43,7 +43,7 @@ public class CourseService {
     
 
     @Transactional(readOnly = true)
-    public Page<CourseDto> getPublishedCourses(Pageable pageable, List<String> tags, List<String> labels, String search) {
+    public Page<CoursePublicDto> getPublishedCourses(Pageable pageable, List<String> tags, List<String> labels, String search) {
         Specification<Course> spec = CourseSpecification.isPublished();
 
         spec = spec.and(CourseSpecification.titleContains(search))
@@ -51,7 +51,7 @@ public class CourseService {
                 .and(CourseSpecification.hasTags(tags));
 
         Page<Course> coursePage = courseRepository.findAll(spec, pageable);
-        return getCourseDtos(coursePage);
+        return getCoursePublicDtos(coursePage);
     }
 
     @Transactional(readOnly = true)
@@ -263,6 +263,14 @@ public class CourseService {
             List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
             List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
             return courseMapper.toDto(course, tags, labels);
+        });
+    }
+
+    private Page<CoursePublicDto> getCoursePublicDtos(Page<Course> coursePage) {
+        return coursePage.map(course -> {
+            List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+            List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
+            return courseMapper.toPublicDto(course, tags, labels);
         });
     }
 }

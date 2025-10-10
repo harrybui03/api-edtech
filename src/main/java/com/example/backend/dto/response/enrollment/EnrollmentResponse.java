@@ -22,11 +22,13 @@ public class EnrollmentResponse {
     private String memberEmail;
     private UUID courseId;
     private String courseTitle;
+    private String courseSlug;
     private EnrollmentMemberType memberType;
     private EnrollmentRole role;
     private BigDecimal progress;
     private UUID currentLessonId;
     private String currentLessonTitle;
+    private String currentLessonSlug;
     private OffsetDateTime creation;
     private OffsetDateTime modified;
 }
