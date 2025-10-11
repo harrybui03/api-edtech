@@ -3,12 +3,10 @@ package com.example.backend.controller;
 import com.example.backend.dto.model.ChapterPublicDto;
 import com.example.backend.dto.model.CoursePublicDto;
 import com.example.backend.dto.model.LessonPublicDto;
+import com.example.backend.dto.model.UserDTO;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.review.ReviewResponse;
-import com.example.backend.service.ChapterService;
-import com.example.backend.service.CourseService;
-import com.example.backend.service.ReviewService;
-import com.example.backend.service.LessonService;
+import com.example.backend.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/public")
@@ -25,6 +24,7 @@ public class PublicController {
     private final ChapterService chapterService;
     private final ReviewService reviewService;
     private final LessonService lessonService;
+    private final UserService userService;
 
     @GetMapping("/courses")
     public ResponseEntity<PaginationResponse<CoursePublicDto>> getPublishedCourses(
@@ -57,5 +57,10 @@ public class PublicController {
     @GetMapping("/lessons/{lessonSlug}")
     public ResponseEntity<LessonPublicDto> getLessonPublic(@PathVariable String lessonSlug) {
         return ResponseEntity.ok(lessonService.getLessonBySlugPublic(lessonSlug));
+    }
+
+    @GetMapping("/users/{userId}")
+    public ResponseEntity<UserDTO> getUserById(@PathVariable UUID userId) {
+        return ResponseEntity.ok(userService.getUserById(userId));
     }
 }

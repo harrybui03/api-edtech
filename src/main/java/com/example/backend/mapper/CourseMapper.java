@@ -94,6 +94,9 @@ public class CourseMapper {
         dto.setLanguage(course.getLanguage());
         dto.setTags(toTagDtoList(tags));
         dto.setLabels(toLabelDtoList(labels));
+        dto.setTargetAudience(course.getTargetAudience());
+        dto.setSkillLevel(course.getSkillLevel());
+        dto.setLearnerProfileDesc(course.getLearnerProfileDesc());
         
         // Map instructors
         if (course.getInstructors() != null) {

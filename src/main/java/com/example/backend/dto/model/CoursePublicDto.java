@@ -21,6 +21,9 @@ public class CoursePublicDto {
     private Integer lessons;
     private Double rating;
     private String language;
+    private String targetAudience;
+    private String skillLevel;
+    private String learnerProfileDesc;
     private List<TagDto> tags;
     private List<LabelDto> labels;
     private List<InstructorDto> instructors;
