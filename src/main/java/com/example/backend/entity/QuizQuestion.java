@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import java.time.OffsetDateTime;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.util.UUID;
 
 @Entity
@@ -31,6 +33,7 @@ public class QuizQuestion {
     // NOTE: For JSONB, mapping to String is simplest.
     // For object mapping, use a library like hibernate-types or native Hibernate 6 support.
     @Column(columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String options;
 
     @Column(name = "correct_answer", columnDefinition = "TEXT")

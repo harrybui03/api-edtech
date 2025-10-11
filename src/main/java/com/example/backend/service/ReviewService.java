@@ -54,6 +54,27 @@ public class ReviewService {
     }
 
     @Transactional
+    public ReviewResponse createReviewBySlug(String courseSlug, ReviewRequest request) {
+        User currentUser = getCurrentUser();
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+
+        verifyEnrollment(course.getId(), currentUser.getId());
+
+        if (reviewRepository.existsByCourseIdAndStudentId(course.getId(), currentUser.getId())) {
+            throw new InvalidRequestDataException("You have already reviewed this course");
+        }
+
+        Review review = ReviewMapper.toEntity(request);
+        review.setCourse(course);
+        review.setStudent(currentUser);
+        review.setModifiedBy(currentUser.getId());
+
+        Review savedReview = reviewRepository.save(review);
+        return ReviewMapper.toResponse(savedReview);
+    }
+
+    @Transactional
     public ReviewResponse updateReview(UUID reviewId, ReviewRequest request) {
         User currentUser = getCurrentUser();
         Review review = findReviewById(reviewId);
@@ -95,6 +116,16 @@ public class ReviewService {
         Review review = reviewRepository.findByCourseIdAndStudentId(courseId, currentUser.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("You have not reviewed this course yet"));
         
+        return ReviewMapper.toResponse(review);
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewResponse getMyReviewForCourseSlug(String courseSlug) {
+        User currentUser = getCurrentUser();
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        Review review = reviewRepository.findByCourseIdAndStudentId(course.getId(), currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("You have not reviewed this course yet"));
         return ReviewMapper.toResponse(review);
     }
 

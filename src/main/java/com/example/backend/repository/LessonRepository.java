@@ -11,4 +11,5 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
     boolean existsBySlug(String slug);
     Optional<Lesson> findBySlug(String slug);
     List<Lesson> findByChapterIdOrderByPosition(UUID chapterId);
+    List<Lesson> findByCourseId(UUID courseId);
 }

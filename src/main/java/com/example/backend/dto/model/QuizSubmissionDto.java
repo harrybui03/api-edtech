@@ -9,13 +9,11 @@ import java.util.UUID;
 public class QuizSubmissionDto {
     private UUID id;
     private UUID quizId;
+    private String quizTitle;
     private UUID memberId;
-    private UUID courseId;
+    private String memberName;
     private Integer score;
-    private Integer scoreOutOf;
     private Integer percentage;
-    private Integer passingPercentage;
     private String result; // JSON string containing detailed results
     private OffsetDateTime creation;
-    private Boolean passed;
 }

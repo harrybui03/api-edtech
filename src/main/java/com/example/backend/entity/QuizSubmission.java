@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -24,23 +26,14 @@ public class QuizSubmission {
     @JoinColumn(name = "member_id", nullable = false)
     private User member;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_id")
-    private Course course;
-
     @Column(nullable = false)
     private Integer score;
-
-    @Column(name = "score_out_of", nullable = false)
-    private Integer scoreOutOf;
 
     @Column(nullable = false)
     private Integer percentage;
 
-    @Column(name = "passing_percentage", nullable = false)
-    private Integer passingPercentage;
-
     @Column(columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String result;
 
     @CreationTimestamp

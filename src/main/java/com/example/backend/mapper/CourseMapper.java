@@ -1,9 +1,11 @@
 package com.example.backend.mapper;
 
 import com.example.backend.dto.model.CourseDto;
+import com.example.backend.dto.model.CoursePublicDto;
 import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.model.LabelDto;
 import com.example.backend.dto.model.TagDto;
+import com.example.backend.dto.model.InstructorDto;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.entity.Chapter;
 import com.example.backend.entity.Course;
@@ -43,19 +45,19 @@ public class CourseMapper {
 
         dto.setVideoLink(course.getVideoLink());
         dto.setStatus(course.getStatus());
-        dto.setPublished(course.getPublished());
-        dto.setPublishedOn(course.getPublishedOn());
         dto.setCoursePrice(course.getCoursePrice());
         dto.setSellingPrice(course.getSellingPrice());
         dto.setCurrency(course.getCurrency());
         dto.setAmountUsd(course.getAmountUsd());
-        dto.setEnableCertification(course.getEnableCertification());
         dto.setEnrollments(course.getEnrollments());
         dto.setLessons(course.getLessons());
         dto.setRating(course.getRating());
         dto.setLanguage(course.getLanguage());
         dto.setTags(toTagDtoList(tags));
         dto.setLabels(toLabelDtoList(labels));
+        dto.setTargetAudience(course.getTargetAudience());
+        dto.setSkillLevel(course.getSkillLevel());
+        dto.setLearnerProfileDesc(course.getLearnerProfileDesc());
         if (course.getChapters() != null) {
             List<ChapterDto> chapterDtos = course.getChapters().stream()
                     .sorted(Comparator.comparing(Chapter::getPosition, Comparator.nullsLast(Comparator.naturalOrder())))
@@ -68,6 +70,47 @@ public class CourseMapper {
 
     public CourseDto toDto(Course course) {
         return toDto(course, Collections.emptyList(), Collections.emptyList());
+    }
+
+    public CoursePublicDto toPublicDto(Course course, List<Tag> tags, List<Label> labels) {
+        if (course == null) {
+            return null;
+        }
+        CoursePublicDto dto = new CoursePublicDto();
+        dto.setId(course.getId());
+        dto.setTitle(course.getTitle());
+        dto.setSlug(course.getSlug());
+        dto.setShortIntroduction(course.getShortIntroduction());
+        dto.setDescription(course.getDescription());
+        if (StringUtils.hasText(course.getImage())) {
+            dto.setImage(fileUploadService.generatePresignedGetUrl(course.getImage()));
+        }
+        dto.setStatus(course.getStatus());
+        dto.setSellingPrice(course.getSellingPrice());
+        dto.setCurrency(course.getCurrency());
+        dto.setEnrollments(course.getEnrollments());
+        dto.setLessons(course.getLessons());
+        dto.setRating(course.getRating() != null ? course.getRating().doubleValue() : null);
+        dto.setLanguage(course.getLanguage());
+        dto.setTags(toTagDtoList(tags));
+        dto.setLabels(toLabelDtoList(labels));
+        dto.setTargetAudience(course.getTargetAudience());
+        dto.setSkillLevel(course.getSkillLevel());
+        dto.setLearnerProfileDesc(course.getLearnerProfileDesc());
+        
+        // Map instructors
+        if (course.getInstructors() != null) {
+            dto.setInstructors(course.getInstructors().stream()
+                    .map(ci -> new InstructorDto(
+                            ci.getUser().getId(),
+                            ci.getUser().getFullName(),
+                            ci.getUser().getEmail(),
+                            ci.getUser().getUserImage()
+                    ))
+                    .collect(Collectors.toList()));
+        }
+        
+        return dto;
     }
 
     private List<TagDto> toTagDtoList(List<Tag> tags) {
@@ -103,7 +146,6 @@ public class CourseMapper {
                 .sellingPrice(request.getSellingPrice())
                 .currency(request.getCurrency())
                 .amountUsd(request.getAmountUsd())
-                .enableCertification(request.getEnableCertification())
                 .language(request.getLanguage())
                 .build();
     }
@@ -122,7 +164,6 @@ public class CourseMapper {
         course.setSellingPrice(request.getSellingPrice());
         course.setCurrency(request.getCurrency());
         course.setAmountUsd(request.getAmountUsd());
-        course.setEnableCertification(request.getEnableCertification());
         course.setLanguage(request.getLanguage());
     }
 }

@@ -12,13 +12,8 @@ public class QuizSubmissionResponse {
     private String quizTitle;
     private UUID memberId;
     private String memberName;
-    private UUID courseId;
-    private String courseTitle;
     private Integer score;
-    private Integer scoreOutOf;
     private Integer percentage;
-    private Integer passingPercentage;
-    private Boolean passed;
     private String result; // JSON string containing detailed results
     private OffsetDateTime creation;
 }

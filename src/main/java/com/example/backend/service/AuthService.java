@@ -97,7 +97,7 @@ public class AuthService {
             long duration = 5;
             String token = jwtTokenProvider.generateVerificationToken(user.getEmail(), duration);
 
-            String confirmLink = appBaseUrl + "auth/verify?token=" + token;
+            String confirmLink = appBaseUrl + "/auth/verify?token=" + token;
             String emailSubject = "Email verification confirmation";
             String rawTemplate = templateService.readHtmlTemplate("confirmation.html");
             String htmlContent = rawTemplate.replace("${confirmationLink}", confirmLink);

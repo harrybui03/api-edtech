@@ -1,6 +1,7 @@
 package com.example.backend.mapper;
 
 import com.example.backend.dto.model.LessonDto;
+import com.example.backend.dto.model.LessonPublicDto;
 import com.example.backend.dto.request.course.LessonRequest;
 import com.example.backend.entity.Lesson;
 import com.example.backend.service.FileUploadService;
@@ -23,6 +24,8 @@ public class LessonMapper {
         dto.setTitle(lesson.getTitle());
         dto.setSlug(lesson.getSlug());
         dto.setContent(lesson.getContent());
+        dto.setQuizDto(QuizMapper.toDto(lesson.getQuiz()));
+
 
         if (StringUtils.hasText(lesson.getVideoUrl())) {
             dto.setVideoUrl(fileUploadService.generatePresignedGetUrl(lesson.getVideoUrl()));
@@ -32,7 +35,18 @@ public class LessonMapper {
             dto.setFileUrl(fileUploadService.generatePresignedGetUrl(lesson.getFileUrl()));
         }
 
-        dto.setDuration(lesson.getDuration());
+        dto.setPosition(lesson.getPosition());
+        return dto;
+    }
+
+    public LessonPublicDto toPublicDto(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
+        LessonPublicDto dto = new LessonPublicDto();
+        dto.setId(lesson.getId());
+        dto.setTitle(lesson.getTitle());
+        dto.setSlug(lesson.getSlug());
         dto.setPosition(lesson.getPosition());
         return dto;
     }
@@ -43,7 +57,6 @@ public class LessonMapper {
         lesson.setContent(request.getContent());
         lesson.setVideoUrl(request.getVideoUrl());
         lesson.setFileUrl(request.getFileUrl());
-        lesson.setDuration(request.getDuration());
         return lesson;
     }
 
@@ -52,6 +65,5 @@ public class LessonMapper {
         lesson.setContent(request.getContent());
         lesson.setVideoUrl(request.getVideoUrl());
         lesson.setFileUrl(request.getFileUrl());
-        lesson.setDuration(request.getDuration());
     }
 }

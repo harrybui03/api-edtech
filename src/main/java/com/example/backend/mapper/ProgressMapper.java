@@ -36,8 +36,6 @@ public class ProgressMapper {
                                         .lessonTitle(lesson.getTitle())
                                         .status(progress != null ? progress.getStatus() : CourseProgressStatus.INCOMPLETE)
                                         .completedAt(progress != null ? progress.getModified() : null)
-                                        .duration(lesson.getDuration())
-                                        .videoUrl(lesson.getVideoUrl())
                                         .build();
                             })
                             .collect(Collectors.toList());
@@ -53,11 +51,13 @@ public class ProgressMapper {
         return CourseProgressResponse.builder()
                 .courseId(courseId)
                 .courseTitle(enrollment.getCourse().getTitle())
+                .courseSlug(enrollment.getCourse().getSlug())
                 .overallProgress(enrollment.getProgress())
                 .completedLessons(completedLessons)
                 .totalLessons(totalLessons)
                 .currentLessonId(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getId() : null)
                 .currentLessonTitle(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getTitle() : null)
+                .currentLessonSlug(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getSlug() : null)
                 .chapters(chapterResponses)
                 .build();
     }

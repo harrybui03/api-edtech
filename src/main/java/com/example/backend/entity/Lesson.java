@@ -42,9 +42,12 @@ public class Lesson {
     @Column(name = "file_url", length = 500)
     private String fileUrl;
 
-    private Integer duration;
-
+    @Column(name = "position")
     private Integer position;
+
+    @ManyToOne
+    @JoinColumn(name = "quiz_id")
+    private Quiz quiz;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

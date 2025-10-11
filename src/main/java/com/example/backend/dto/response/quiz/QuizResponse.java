@@ -11,21 +11,12 @@ import java.util.UUID;
 public class QuizResponse {
     private UUID id;
     private String title;
-    private String explanation;
-    private UUID lessonId;
-    private UUID courseId;
-    private Integer maxAttempts;
     private Boolean showAnswers;
     private Boolean showSubmissionHistory;
     private Integer totalMarks;
-    private Integer passingPercentage;
-    private String duration;
-    private Boolean shuffleQuestions;
-    private Integer limitQuestionsTo;
-    private Boolean enableNegativeMarking;
-    private Integer marksToCut;
     private OffsetDateTime creation;
     private OffsetDateTime modified;
+    private UUID modifiedBy;
     private List<QuizQuestionDto> questions;
     private Integer userAttempts; // Number of attempts by current user
 }

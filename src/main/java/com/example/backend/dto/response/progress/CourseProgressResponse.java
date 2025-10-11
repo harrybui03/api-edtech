@@ -16,10 +16,12 @@ import java.util.UUID;
 public class CourseProgressResponse {
     private UUID courseId;
     private String courseTitle;
+    private String courseSlug;
     private BigDecimal overallProgress;
     private int completedLessons;
     private int totalLessons;
     private UUID currentLessonId;
     private String currentLessonTitle;
+    private String currentLessonSlug;
     private List<ChapterProgressResponse> chapters;
 }

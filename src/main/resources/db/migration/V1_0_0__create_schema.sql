@@ -1,5 +1,5 @@
--- UP
--- This section creates all tables and functions for the Frappe Learning LMS.
+-- Final Consolidated Schema for Frappe Learning LMS
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Custom function to update the 'modified' timestamp
@@ -7,520 +7,176 @@ CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.modified = now();
-RETURN NEW;
+    RETURN NEW;
 END;
 $$ language 'plpgsql';
 
--- 2. TABLES
--- BẢNG NGƯỜI DÙNG VÀ PHÂN QUYỀN
+
+-- Table for Users and Roles
 CREATE TABLE users (
-                       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                       email VARCHAR(255) UNIQUE NOT NULL,
-                       username VARCHAR(255) UNIQUE,
-                       full_name VARCHAR(255) NOT NULL,
-                       user_image VARCHAR(255),
-                       enabled BOOLEAN DEFAULT TRUE,
-                       user_type VARCHAR(50) DEFAULT 'WEBSITE_USER',
-                       last_active TIMESTAMPTZ,
-                       creation TIMESTAMPTZ DEFAULT NOW(),
-                       modified TIMESTAMPTZ DEFAULT NOW(),
-                       modified_by UUID
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(255) UNIQUE,
+    full_name VARCHAR(255) NOT NULL,
+    user_image VARCHAR(255),
+    enabled BOOLEAN DEFAULT TRUE,
+    user_type VARCHAR(50) DEFAULT 'WEBSITE_USER',
+    last_active TIMESTAMPTZ,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    modified_by UUID
 );
 
 CREATE TABLE user_roles (
-                            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                            user_id UUID NOT NULL,
-                            role VARCHAR(50) NOT NULL,
-                            creation TIMESTAMPTZ DEFAULT NOW(),
-                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                            UNIQUE (user_id, role)
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (user_id, role)
 );
 
--- BẢNG KHÓA HỌC VÀ NỘI DUNG
+-- Table for Courses and Content
 CREATE TABLE courses (
-                         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                         title VARCHAR(255) NOT NULL,
-                         short_introduction TEXT,
-                         description TEXT,
-                         image VARCHAR(255),
-                         video_link VARCHAR(500),
-                         tags VARCHAR(500),
-                         category VARCHAR(255),
-                         status VARCHAR(50) DEFAULT 'IN_PROGRESS',
-                         published BOOLEAN DEFAULT FALSE,
-                         published_on DATE,
-                         upcoming BOOLEAN DEFAULT FALSE,
-                         featured BOOLEAN DEFAULT FALSE,
-                         disable_self_learning BOOLEAN DEFAULT FALSE,
-                         paid_course BOOLEAN DEFAULT FALSE,
-                         course_price DECIMAL(10,2),
-                         currency VARCHAR(10),
-                         amount_usd DECIMAL(10,2),
-                         enable_certification BOOLEAN DEFAULT FALSE,
-                         paid_certificate BOOLEAN DEFAULT FALSE,
-                         evaluator UUID,
-                         enrollments INTEGER DEFAULT 0,
-                         lessons INTEGER DEFAULT 0,
-                         rating DECIMAL(3,2) DEFAULT 0,
-                         creation TIMESTAMPTZ DEFAULT NOW(),
-                         modified TIMESTAMPTZ DEFAULT NOW(),
-                         modified_by UUID,
-                         FOREIGN KEY (evaluator) REFERENCES users(id)
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) UNIQUE,
+    short_introduction TEXT,
+    description TEXT,
+    image VARCHAR(255),
+    video_link VARCHAR(500),
+    status VARCHAR(50) DEFAULT 'IN_PROGRESS',
+    paid_course BOOLEAN DEFAULT FALSE,
+    course_price DECIMAL(10,2),
+    selling_price DECIMAL(10, 2),
+    currency VARCHAR(10),
+    amount_usd DECIMAL(10,2),
+    enrollments INTEGER DEFAULT 0,
+    lessons INTEGER DEFAULT 0,
+    rating DECIMAL(3,2) DEFAULT 0,
+    language VARCHAR(50),
+    target_audience TEXT,
+    skill_level TEXT,
+    learner_profile_desc TEXT,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    modified_by UUID
 );
 
 CREATE TABLE course_instructors (
-                                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                    course_id UUID NOT NULL,
-                                    instructor_id UUID NOT NULL,
-                                    creation TIMESTAMPTZ DEFAULT NOW(),
-                                    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                                    FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE,
-                                    UNIQUE (course_id, instructor_id)
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    instructor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (course_id, instructor_id)
 );
 
 CREATE TABLE chapters (
-                          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                          title VARCHAR(255) NOT NULL,
-                          course_id UUID NOT NULL,
-                          is_scorm_package BOOLEAN DEFAULT FALSE,
-                          scorm_package VARCHAR(255),
-                          scorm_package_path TEXT,
-                          manifest_file TEXT,
-                          launch_file TEXT,
-                          creation TIMESTAMPTZ DEFAULT NOW(),
-                          modified TIMESTAMPTZ DEFAULT NOW(),
-                          modified_by UUID,
-                          FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL,
+    slug VARCHAR(255),
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    summary TEXT,
+    "position" INTEGER,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    modified_by UUID
+);
+
+-- Tables for Quizzes
+CREATE TABLE quizzes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL UNIQUE,
+    show_answers BOOLEAN DEFAULT TRUE,
+    show_submission_history BOOLEAN DEFAULT FALSE,
+    total_marks INTEGER DEFAULT 0,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    modified_by UUID
 );
 
 CREATE TABLE lessons (
-                         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                         title VARCHAR(255) NOT NULL,
-                         chapter_id UUID NOT NULL,
-                         course_id UUID NOT NULL,
-                         content TEXT,
-                         video_url VARCHAR(500),
-                         file_url VARCHAR(500),
-                         duration INTEGER,
-                         creation TIMESTAMPTZ DEFAULT NOW(),
-                         modified TIMESTAMPTZ DEFAULT NOW(),
-                         modified_by UUID,
-                         FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
-                         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL,
+    slug VARCHAR(255),
+    chapter_id UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    quiz_id UUID REFERENCES quizzes(id) ON DELETE CASCADE,
+    content TEXT,
+    video_url VARCHAR(500),
+    file_url VARCHAR(500),
+    "position" INTEGER,
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    modified_by UUID
 );
 
--- BẢNG ĐĂNG KÝ VÀ TIẾN ĐỘ
+-- Table for Enrollments and Progress
 CREATE TABLE enrollments (
-                             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                             member_id UUID NOT NULL,
-                             course_id UUID NOT NULL,
-                             member_type VARCHAR(50) DEFAULT 'STUDENT',
-                             role VARCHAR(50) DEFAULT 'MEMBER',
-                             progress DECIMAL(5,2) DEFAULT 0,
-                             current_lesson UUID,
-                             payment_id UUID,
-                             purchased_certificate BOOLEAN DEFAULT FALSE,
-                             certificate_id UUID,
-                             cohort_id UUID,
-                             subgroup_id UUID,
-                             batch_old_id UUID,
-                             creation TIMESTAMPTZ DEFAULT NOW(),
-                             modified TIMESTAMPTZ DEFAULT NOW(),
-                             FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                             FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                             FOREIGN KEY (current_lesson) REFERENCES lessons(id),
-                             UNIQUE (member_id, course_id)
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    member_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    member_type VARCHAR(50) DEFAULT 'STUDENT',
+    role VARCHAR(50) DEFAULT 'MEMBER',
+    progress DECIMAL(5,2) DEFAULT 0,
+    current_lesson UUID REFERENCES lessons(id),
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (member_id, course_id)
 );
 
 CREATE TABLE course_progress (
-                                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                 member_id UUID NOT NULL,
-                                 lesson_id UUID NOT NULL,
-                                 chapter_id UUID NOT NULL,
-                                 course_id UUID NOT NULL,
-                                 status VARCHAR(50) DEFAULT 'INCOMPLETE',
-                                 creation TIMESTAMPTZ DEFAULT NOW(),
-                                 modified TIMESTAMPTZ DEFAULT NOW(),
-                                 FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                                 FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-                                 FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
-                                 FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                                 UNIQUE (member_id, lesson_id)
-);
-
--- BẢNG LỚP HỌC (BATCHES)
-CREATE TABLE batches (
-                         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                         title VARCHAR(255) NOT NULL,
-                         description TEXT,
-                         start_date DATE NOT NULL,
-                         end_date DATE NOT NULL,
-                         start_time TIME NOT NULL,
-                         end_time TIME,
-                         timezone VARCHAR(50),
-                         published BOOLEAN DEFAULT FALSE,
-                         allow_self_enrollment BOOLEAN DEFAULT FALSE,
-                         certification BOOLEAN DEFAULT FALSE,
-                         medium VARCHAR(50) DEFAULT 'ONLINE',
-                         category VARCHAR(255),
-                         seat_count INTEGER,
-                         evaluation_end_date DATE,
-                         meta_image VARCHAR(255),
-                         batch_details TEXT,
-                         batch_details_raw TEXT,
-                         show_live_class BOOLEAN DEFAULT FALSE,
-                         allow_future BOOLEAN DEFAULT FALSE,
-                         paid_batch BOOLEAN DEFAULT FALSE,
-                         amount DECIMAL(10,2),
-                         currency VARCHAR(10),
-                         amount_usd DECIMAL(10,2),
-                         custom_component TEXT,
-                         custom_script TEXT,
-                         creation TIMESTAMPTZ DEFAULT NOW(),
-                         modified TIMESTAMPTZ DEFAULT NOW(),
-                         modified_by UUID
-);
-
-CREATE TABLE batch_courses (
-                               id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                               batch_id UUID NOT NULL,
-                               course_id UUID NOT NULL,
-                               creation TIMESTAMPTZ DEFAULT NOW(),
-                               FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE CASCADE,
-                               FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                               UNIQUE (batch_id, course_id)
-);
-
-CREATE TABLE batch_enrollments (
-                                   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                   member_id UUID NOT NULL,
-                                   batch_id UUID NOT NULL,
-                                   payment_id UUID,
-                                   source VARCHAR(255),
-                                   confirmation_email_sent BOOLEAN DEFAULT FALSE,
-                                   creation TIMESTAMPTZ DEFAULT NOW(),
-                                   FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                                   FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE CASCADE,
-                                   UNIQUE (member_id, batch_id)
-);
-
--- BẢNG BÀI TẬP VÀ ĐÁNH GIÁ
-CREATE TABLE assignments (
-                             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                             title VARCHAR(255) NOT NULL,
-                             question TEXT NOT NULL,
-                             type VARCHAR(50) NOT NULL ,
-                             grade_assignment BOOLEAN DEFAULT TRUE,
-                             show_answer BOOLEAN DEFAULT FALSE,
-                             answer TEXT,
-                             creation TIMESTAMPTZ DEFAULT NOW(),
-                             modified TIMESTAMPTZ DEFAULT NOW(),
-                             modified_by UUID
-);
-
-CREATE TABLE assignment_submissions (
-                                        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                        assignment_id UUID NOT NULL,
-                                        member_id UUID NOT NULL,
-                                        evaluator_id UUID,
-                                        assignment_attachment VARCHAR(255),
-                                        answer TEXT,
-                                        status VARCHAR(50) DEFAULT 'NOT_GRADED',
-                                        comments TEXT,
-                                        question TEXT,
-                                        course_id UUID,
-                                        lesson_id UUID,
-                                        creation TIMESTAMPTZ DEFAULT NOW(),
-                                        modified TIMESTAMPTZ DEFAULT NOW(),
-                                        FOREIGN KEY (assignment_id) REFERENCES assignments(id) ON DELETE CASCADE,
-                                        FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                                        FOREIGN KEY (evaluator_id) REFERENCES users(id),
-                                        FOREIGN KEY (course_id) REFERENCES courses(id),
-                                        FOREIGN KEY (lesson_id) REFERENCES lessons(id)
-);
-
-CREATE TABLE quizzes (
-                         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                         title VARCHAR(255) NOT NULL UNIQUE,
-                         lesson_id UUID,
-                         course_id UUID,
-                         max_attempts INTEGER DEFAULT 0,
-                         show_answers BOOLEAN DEFAULT TRUE,
-                         show_submission_history BOOLEAN DEFAULT FALSE,
-                         total_marks INTEGER DEFAULT 0,
-                         passing_percentage INTEGER NOT NULL,
-                         duration VARCHAR(50),
-                         shuffle_questions BOOLEAN DEFAULT FALSE,
-                         limit_questions_to INTEGER,
-                         enable_negative_marking BOOLEAN DEFAULT FALSE,
-                         marks_to_cut INTEGER DEFAULT 1,
-                         creation TIMESTAMPTZ DEFAULT NOW(),
-                         modified TIMESTAMPTZ DEFAULT NOW(),
-                         modified_by UUID,
-                         FOREIGN KEY (lesson_id) REFERENCES lessons(id),
-                         FOREIGN KEY (course_id) REFERENCES courses(id)
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    member_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lesson_id UUID NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    chapter_id UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'INCOMPLETE' CHECK (status IN ('COMPLETE', 'PARTIALLY_COMPLETE', 'INCOMPLETE')),
+    creation TIMESTAMPTZ DEFAULT NOW(),
+    modified TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (member_id, lesson_id)
 );
 
 CREATE TABLE quiz_questions (
-                                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                quiz_id UUID NOT NULL,
-                                question TEXT NOT NULL,
-                                type VARCHAR(50) NOT NULL,
-                                options JSONB,
-                                correct_answer TEXT,
-                                marks INTEGER DEFAULT 1,
-                                creation TIMESTAMPTZ DEFAULT NOW(),
-                                FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
-);
-
-CREATE TABLE quiz_submissions (
-                                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                  quiz_id UUID NOT NULL,
-                                  member_id UUID NOT NULL,
-                                  course_id UUID,
-                                  score INTEGER NOT NULL,
-                                  score_out_of INTEGER NOT NULL,
-                                  percentage INTEGER NOT NULL,
-                                  passing_percentage INTEGER NOT NULL,
-                                  result JSONB,
-                                  creation TIMESTAMPTZ DEFAULT NOW(),
-                                  FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
-                                  FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                                  FOREIGN KEY (course_id) REFERENCES courses(id)
-);
-
--- BẢNG LẬP TRÌNH
-CREATE TABLE programming_exercises (
-                                       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                       title VARCHAR(255) NOT NULL,
-                                       description TEXT,
-                                       code TEXT,
-                                       answer TEXT,
-                                       hints TEXT,
-                                       tests TEXT,
-                                       image TEXT,
-                                       lesson_id UUID,
-                                       course_id UUID,
-                                       index_num INTEGER,
-                                       index_label VARCHAR(255),
-                                       creation TIMESTAMPTZ DEFAULT NOW(),
-                                       modified TIMESTAMPTZ DEFAULT NOW(),
-                                       modified_by UUID,
-                                       FOREIGN KEY (lesson_id) REFERENCES lessons(id),
-                                       FOREIGN KEY (course_id) REFERENCES courses(id)
-);
-
-CREATE TABLE programming_exercise_submissions (
-                                                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                                  exercise_id UUID NOT NULL,
-                                                  member_id UUID NOT NULL,
-                                                  status VARCHAR(50),
-                                                  code TEXT NOT NULL,
-                                                  test_cases JSONB,
-                                                  creation TIMESTAMPTZ DEFAULT NOW(),
-                                                  modified TIMESTAMPTZ DEFAULT NOW(),
-                                                  FOREIGN KEY (exercise_id) REFERENCES programming_exercises(id) ON DELETE CASCADE,
-                                                  FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- BẢNG CHỨNG CHỈ
-CREATE TABLE certificates (
-                              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                              member_id UUID NOT NULL,
-                              course_id UUID,
-                              batch_id UUID,
-                              evaluator_id UUID,
-                              issue_date DATE NOT NULL,
-                              expiry_date DATE,
-                              template VARCHAR(255) NOT NULL,
-                              published BOOLEAN DEFAULT FALSE,
-                              creation TIMESTAMPTZ DEFAULT NOW(),
-                              modified TIMESTAMPTZ DEFAULT NOW(),
-                              modified_by UUID,
-                              FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                              FOREIGN KEY (course_id) REFERENCES courses(id),
-                              FOREIGN KEY (batch_id) REFERENCES batches(id),
-                              FOREIGN KEY (evaluator_id) REFERENCES users(id)
-);
-
-CREATE TABLE certificate_requests (
-                                      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                      member_id UUID NOT NULL,
-                                      course_id UUID NOT NULL,
-                                      batch_id UUID,
-                                      status VARCHAR(50) DEFAULT 'UPCOMING',
-                                      creation TIMESTAMPTZ DEFAULT NOW(),
-                                      modified TIMESTAMPTZ DEFAULT NOW(),
-                                      FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                                      FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                                      FOREIGN KEY (batch_id) REFERENCES batches(id)
-);
-
--- BẢNG THANH TOÁN
-CREATE TABLE payments (
-                          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                          member_id UUID NOT NULL,
-                          billing_name VARCHAR(255) NOT NULL,
-                          source VARCHAR(255),
-                          payment_for_document_type VARCHAR(255),
-                          payment_for_document VARCHAR(255),
-                          payment_received BOOLEAN DEFAULT FALSE,
-                          payment_for_certificate BOOLEAN DEFAULT FALSE,
-                          currency VARCHAR(10) NOT NULL,
-                          amount DECIMAL(10,2) NOT NULL,
-                          amount_with_gst DECIMAL(10,2),
-                          order_id VARCHAR(255),
-                          payment_id VARCHAR(255),
-                          address_id VARCHAR(255),
-                          gstin VARCHAR(255),
-                          pan VARCHAR(255),
-                          creation TIMESTAMPTZ DEFAULT NOW(),
-                          modified TIMESTAMPTZ DEFAULT NOW(),
-                          FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-ALTER TABLE enrollments ADD CONSTRAINT fk_enrollments_certificate FOREIGN KEY (certificate_id) REFERENCES certificates(id);
-ALTER TABLE batch_enrollments ADD CONSTRAINT fk_batch_enrollments_payment FOREIGN KEY (payment_id) REFERENCES payments(id);
-
--- BẢNG VIỆC LÀM
-CREATE TABLE job_opportunities (
-                                   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                   job_title VARCHAR(255) NOT NULL,
-                                   location VARCHAR(255) NOT NULL,
-                                   country VARCHAR(255) NOT NULL,
-                                   type VARCHAR(50) DEFAULT 'FULL_TIME',
-                                   status VARCHAR(50) DEFAULT 'OPEN',
-                                   disabled BOOLEAN DEFAULT FALSE,
-                                   company_name VARCHAR(255) NOT NULL,
-                                   company_website VARCHAR(255) NOT NULL,
-                                   company_logo VARCHAR(255) NOT NULL,
-                                   company_email_address VARCHAR(255) NOT NULL,
-                                   description TEXT NOT NULL,
-                                   creation TIMESTAMPTZ DEFAULT NOW(),
-                                   modified TIMESTAMPTZ DEFAULT NOW(),
-                                   modified_by UUID
-);
-
-CREATE TABLE job_applications (
-                                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                  user_id UUID NOT NULL,
-                                  job_id UUID NOT NULL,
-                                  resume VARCHAR(255) NOT NULL,
-                                  creation TIMESTAMPTZ DEFAULT NOW(),
-                                  modified TIMESTAMPTZ DEFAULT NOW(),
-                                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                                  FOREIGN KEY (job_id) REFERENCES job_opportunities(id) ON DELETE CASCADE,
-                                  UNIQUE (user_id, job_id)
-);
-
--- BẢNG THỐNG KÊ VÀ THEO DÕI
-CREATE TABLE IF NOT EXISTS live_classes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    quiz_id UUID NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    explanation TEXT,
+    options JSONB,
+    correct_answer TEXT,
+    marks INTEGER DEFAULT 1,
     creation TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE video_watch_duration (
-                                      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                      lesson_id UUID NOT NULL,
-                                      chapter_id UUID,
-                                      course_id UUID,
-                                      member_id UUID NOT NULL,
-                                      source VARCHAR(255) NOT NULL,
-                                      watch_time VARCHAR(255) NOT NULL,
-                                      creation TIMESTAMPTZ DEFAULT NOW(),
-                                      FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-                                      FOREIGN KEY (chapter_id) REFERENCES chapters(id),
-                                      FOREIGN KEY (course_id) REFERENCES courses(id),
-                                      FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE
+CREATE TABLE quiz_submissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    quiz_id UUID NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    member_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    score INTEGER NOT NULL,
+    percentage INTEGER NOT NULL,
+    result JSONB,
+    creation TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE live_class_participants (
-                                         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                         live_class_id UUID NOT NULL,
-                                         member_id UUID NOT NULL,
-                                         joined_at TIMESTAMPTZ NOT NULL,
-                                         left_at TIMESTAMPTZ NOT NULL,
-                                         duration INTEGER NOT NULL,
-                                         creation TIMESTAMPTZ DEFAULT NOW(),
-                                         FOREIGN KEY (live_class_id) REFERENCES live_classes(id) ON DELETE CASCADE,
-                                         FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE
+-- Tables for Tags and Labels
+CREATE TABLE tags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    entity_id UUID NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- BẢNG CẤU HÌNH VÀ THIẾT LẬP
-CREATE TABLE lms_settings (
-                              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                              default_home VARCHAR(255),
-                              send_calendar_invite_for_evaluations BOOLEAN DEFAULT FALSE,
-                              persona_captured BOOLEAN DEFAULT FALSE,
-                              allow_guest_access BOOLEAN DEFAULT FALSE,
-                              enable_learning_paths BOOLEAN DEFAULT FALSE,
-                              prevent_skipping_videos BOOLEAN DEFAULT FALSE,
-                              unsplash_access_key VARCHAR(255),
-                              livecode_url VARCHAR(255),
-                              show_day_view BOOLEAN DEFAULT FALSE,
-                              show_dashboard BOOLEAN DEFAULT TRUE,
-                              show_courses BOOLEAN DEFAULT TRUE,
-                              show_students BOOLEAN DEFAULT TRUE,
-                              show_assessments BOOLEAN DEFAULT TRUE,
-                              show_live_class BOOLEAN DEFAULT TRUE,
-                              show_discussions BOOLEAN DEFAULT TRUE,
-                              show_emails BOOLEAN DEFAULT TRUE,
-                              user_category VARCHAR(255),
-                              disable_signup BOOLEAN DEFAULT FALSE,
-                              custom_signup_content TEXT,
-                              payment_gateway VARCHAR(255),
-                              default_currency VARCHAR(10),
-                              exception_country VARCHAR(255),
-                              apply_gst BOOLEAN DEFAULT FALSE,
-                              show_usd_equivalent BOOLEAN DEFAULT FALSE,
-                              apply_rounding BOOLEAN DEFAULT FALSE,
-                              no_payments_app BOOLEAN DEFAULT FALSE,
-                              certification_template VARCHAR(255),
-                              batch_confirmation_template VARCHAR(255),
-                              payment_reminder_template VARCHAR(255),
-                              meta_description TEXT,
-                              meta_image VARCHAR(255),
-                              meta_keywords TEXT,
-                              creation TIMESTAMPTZ DEFAULT NOW(),
-                              modified TIMESTAMPTZ DEFAULT NOW(),
-                              modified_by UUID
+CREATE TABLE labels (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    entity_id UUID NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- BẢNG BỔ SUNG
-CREATE TABLE categories (
-                            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                            name VARCHAR(255) NOT NULL,
-                            description TEXT,
-                            creation TIMESTAMPTZ DEFAULT NOW(),
-                            modified TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE sources (
-                         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                         source VARCHAR(255) NOT NULL UNIQUE,
-                         creation TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE badges (
-                        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                        name VARCHAR(255) NOT NULL,
-                        description TEXT,
-                        image VARCHAR(255),
-                        criteria JSONB,
-                        creation TIMESTAMPTZ DEFAULT NOW(),
-                        modified TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE badge_assignments (
-                                   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                   badge_id UUID NOT NULL,
-                                   member_id UUID NOT NULL,
-                                   assigned_by UUID,
-                                   assigned_date TIMESTAMPTZ DEFAULT NOW(),
-                                   FOREIGN KEY (badge_id) REFERENCES badges(id) ON DELETE CASCADE,
-                                   FOREIGN KEY (member_id) REFERENCES users(id) ON DELETE CASCADE,
-                                   FOREIGN KEY (assigned_by) REFERENCES users(id),
-                                   UNIQUE (badge_id, member_id)
-);
-
-
+-- Indexes for performance
+CREATE INDEX idx_tags_on_entity ON tags (entity_id, entity_type);
+CREATE INDEX idx_labels_on_entity ON labels (entity_id, entity_type);
