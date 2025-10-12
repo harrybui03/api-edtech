@@ -17,17 +17,29 @@ import com.example.backend.dto.request.instructor.InstructorIdRequest;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionsRequest;
+import com.example.backend.dto.request.payos.CreatePayOSConfigRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
+import com.example.backend.dto.response.payos.PayOSConfigResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
 import com.example.backend.service.*;
+import com.example.backend.service.ChapterService;
+import com.example.backend.service.CourseService;
+import com.example.backend.service.LessonService;
+import com.example.backend.service.EnrollmentService;
+import com.example.backend.service.PayOSConfigService;
+import com.example.backend.service.QuizService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -42,6 +54,7 @@ public class InstructorController {
     private final EnrollmentService enrollmentService;
     private final QuizService quizService;
     private final BatchService batchService;
+    private final PayOSConfigService payOSConfigService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -251,6 +264,21 @@ public class InstructorController {
         batchService.removeInstructorFromBatch(batchId, instructorId);
         return ResponseEntity.noContent().build();
     }
-    
-    
+
+
+
+    // PayOS Configuration APIs
+    @PostMapping("/payos-configs")
+    @Operation(summary = "Create PayOS configuration", description = "Create a new PayOS configuration for an instructor")
+        public ResponseEntity<PayOSConfigResponse> createPayOSConfig(@RequestBody CreatePayOSConfigRequest request) {
+        PayOSConfigResponse response = payOSConfigService.createPayOSConfig(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/payos-configs/my-config")
+    @Operation(summary = "Get my PayOS configuration", description = "Get current user's active PayOS configuration")
+    public ResponseEntity<PayOSConfigResponse> getMyPayOSConfig() {
+        PayOSConfigResponse response = payOSConfigService.getMyPayOSConfig();
+        return ResponseEntity.ok(response);
+    }
 }

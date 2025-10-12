@@ -208,6 +208,46 @@ public class EnrollmentService {
         return enrollmentRepository.existsByMemberIdAndCourseId(studentId, courseId);
     }
     
+    @Transactional(readOnly = true)
+    public boolean isPaidCourse(UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+        return Boolean.TRUE.equals(course.getPaidCourse());
+    }
+    
+    @Transactional
+    public void createEnrollment(UUID studentId, UUID courseId) {
+        log.info("Creating enrollment for student {} in course {}", studentId, courseId);
+        
+        User student = userRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+        
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+        
+        // Check if already enrolled
+        if (enrollmentRepository.existsByMemberIdAndCourseId(studentId, courseId)) {
+            log.warn("Student {} is already enrolled in course {}", studentId, courseId);
+            return;
+        }
+        
+        // Create new enrollment
+        Enrollment enrollment = new Enrollment();
+        enrollment.setMember(student);
+        enrollment.setCourse(course);
+        enrollment.setMemberType(EnrollmentMemberType.STUDENT);
+        enrollment.setRole(EnrollmentRole.MEMBER);
+        enrollment.setProgress(BigDecimal.ZERO);
+        
+        enrollmentRepository.save(enrollment);
+        
+        // Update course enrollment count
+        course.setEnrollments((course.getEnrollments() != null ? course.getEnrollments() : 0) + 1);
+        courseRepository.save(course);
+        
+        log.info("Successfully created enrollment for student {} in course {}", studentId, courseId);
+    }
+    
     private String getCurrentUserEmail() {
         return SecurityContextHolder.getContext().getAuthentication().getName();
     }
