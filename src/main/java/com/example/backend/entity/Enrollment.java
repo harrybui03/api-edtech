@@ -45,27 +45,6 @@ public class Enrollment {
     @JoinColumn(name = "current_lesson")
     private Lesson currentLesson;
 
-    @Column(name = "payment_id")
-    private UUID paymentId;
-
-    @Column(name = "purchased_certificate")
-    private Boolean purchasedCertificate;
-
-    // The certificate_id is mapped with a direct relationship
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "certificate_id")
-    private Certificate certificate;
-
-    @Column(name = "cohort_id")
-    private UUID cohortId;
-
-    @Column(name = "subgroup_id")
-    private UUID subgroupId;
-
-    @Column(name = "batch_old_id")
-    private UUID batchOldId;
-    // ... other UUID fields like cohort_id etc.
-
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private OffsetDateTime creation;

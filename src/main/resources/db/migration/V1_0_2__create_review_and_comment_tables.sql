@@ -1,6 +1,3 @@
--- Create VoteType enum
-CREATE TYPE vote_type_enum AS ENUM ('UPVOTE', 'DOWNVOTE');
-
 -- 1. CREATE REVIEWS TABLE
 CREATE TABLE reviews (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -39,7 +36,7 @@ CREATE TABLE comment_votes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    vote_type vote_type_enum NOT NULL,
+    vote_type BOOLEAN NOT NULL, -- true = UPVOTE, false = DOWNVOTE
     creation TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     -- Unique constraint: one vote per user per comment

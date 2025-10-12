@@ -53,7 +53,7 @@ public final class ReviewMapper {
         Review review = new Review();
         review.setRating(request.getRating());
         review.setComment(request.getComment());
-        review.setIsApproved(false); // Default to not approved
+        review.setIsApproved(true); // Auto-approve all reviews
         return review;
     }
 

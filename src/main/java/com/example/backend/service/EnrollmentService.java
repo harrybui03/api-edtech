@@ -1,14 +1,17 @@
 package com.example.backend.service;
 
+import com.example.backend.constant.CourseStatus;
 import com.example.backend.constant.EnrollmentMemberType;
 import com.example.backend.constant.EnrollmentRole;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.entity.Course;
 import com.example.backend.entity.Enrollment;
+import com.example.backend.entity.Lesson;
 import com.example.backend.entity.User;
 import com.example.backend.mapper.EnrollmentMapper;
 import com.example.backend.repository.CourseRepository;
 import com.example.backend.repository.EnrollmentRepository;
+import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +33,7 @@ public class EnrollmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final LessonRepository lessonRepository;
     private final EnrollmentMapper enrollmentMapper;
     
     public EnrollmentResponse enrollInCourse(UUID courseId) {
@@ -48,8 +52,7 @@ public class EnrollmentService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
         
-        // Check if course is published and available for enrollment
-        if (!Boolean.TRUE.equals(course.getPublished())) {
+        if (course.getStatus() != CourseStatus.PUBLISHED) {
             throw new RuntimeException("Course is not available for enrollment");
         }
         
@@ -60,7 +63,18 @@ public class EnrollmentService {
         enrollment.setMemberType(EnrollmentMemberType.STUDENT);
         enrollment.setRole(EnrollmentRole.MEMBER);
         enrollment.setProgress(BigDecimal.ZERO);
-        enrollment.setPurchasedCertificate(false);
+        
+        // Set current lesson to the first lesson of the course
+        List<Lesson> lessons = lessonRepository.findByCourseId(courseId);
+        if (!lessons.isEmpty()) {
+            // Sort lessons by chapter position and lesson position
+            lessons.sort((l1, l2) -> {
+                int chapterComparison = l1.getChapter().getPosition().compareTo(l2.getChapter().getPosition());
+                if (chapterComparison != 0) return chapterComparison;
+                return l1.getPosition().compareTo(l2.getPosition());
+            });
+            enrollment.setCurrentLesson(lessons.get(0));
+        }
         
         enrollment = enrollmentRepository.save(enrollment);
         
@@ -70,7 +84,54 @@ public class EnrollmentService {
         
         log.info("Successfully enrolled student {} in course {}", studentEmail, courseId);
         
-        return enrollmentMapper.mapToEnrollmentResponse(enrollment);
+        return enrollmentMapper.toResponse(enrollment);
+    }
+
+    public EnrollmentResponse enrollInCourseBySlug(String courseSlug) {
+        String studentEmail = getCurrentUserEmail();
+        log.info("Enrolling student {} in course slug {}", studentEmail, courseSlug);
+
+        User student = userRepository.findByEmail(studentEmail)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        if (enrollmentRepository.existsByMemberIdAndCourseId(student.getId(), course.getId())) {
+            throw new RuntimeException("Student is already enrolled in this course");
+        }
+
+        if (course.getStatus() != CourseStatus.PUBLISHED) {
+            throw new RuntimeException("Course is not available for enrollment");
+        }
+
+        Enrollment enrollment = new Enrollment();
+        enrollment.setMember(student);
+        enrollment.setCourse(course);
+        enrollment.setMemberType(EnrollmentMemberType.STUDENT);
+        enrollment.setRole(EnrollmentRole.MEMBER);
+        enrollment.setProgress(BigDecimal.ZERO);
+
+        // Set current lesson to the first lesson of the course
+        List<Lesson> lessons = lessonRepository.findByCourseId(course.getId());
+        if (!lessons.isEmpty()) {
+            // Sort lessons by chapter position and lesson position
+            lessons.sort((l1, l2) -> {
+                int chapterComparison = l1.getChapter().getPosition().compareTo(l2.getChapter().getPosition());
+                if (chapterComparison != 0) return chapterComparison;
+                return l1.getPosition().compareTo(l2.getPosition());
+            });
+            enrollment.setCurrentLesson(lessons.get(0));
+        }
+
+        enrollment = enrollmentRepository.save(enrollment);
+
+        course.setEnrollments((course.getEnrollments() != null ? course.getEnrollments() : 0) + 1);
+        courseRepository.save(course);
+
+        log.info("Successfully enrolled student {} in course slug {}", studentEmail, courseSlug);
+
+        return enrollmentMapper.toResponse(enrollment);
     }
     
     @Transactional(readOnly = true)
@@ -84,7 +145,7 @@ public class EnrollmentService {
         List<Enrollment> enrollments = enrollmentRepository.findByMemberId(student.getId());
         
         return enrollments.stream()
-                .map(enrollmentMapper::mapToEnrollmentResponse)
+                .map(enrollmentMapper::toResponse)
                 .collect(Collectors.toList());
     }
     
@@ -110,7 +171,7 @@ public class EnrollmentService {
         List<Enrollment> enrollments = enrollmentRepository.findByCourseIdAndInstructorId(courseId, instructor.getId());
         
         return enrollments.stream()
-                .map(enrollmentMapper::mapToEnrollmentResponse)
+                .map(enrollmentMapper::toResponse)
                 .collect(Collectors.toList());
     }
     

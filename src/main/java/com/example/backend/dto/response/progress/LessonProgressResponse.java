@@ -19,5 +19,4 @@ public class LessonProgressResponse {
     private CourseProgressStatus status;
     private OffsetDateTime completedAt;
     private Integer duration;
-    private String videoUrl;
 }

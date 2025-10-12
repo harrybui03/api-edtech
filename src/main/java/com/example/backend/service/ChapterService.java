@@ -2,6 +2,7 @@ package com.example.backend.service;
 
 import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.request.course.ChapterRequest;
+import com.example.backend.dto.model.ChapterPublicDto;
 import com.example.backend.entity.Chapter;
 import com.example.backend.entity.Course;
 import com.example.backend.entity.User;
@@ -20,6 +21,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.example.backend.util.SlugConverter.toSlug;
+
+
 @Service
 @RequiredArgsConstructor
 public class ChapterService {
@@ -30,13 +34,24 @@ public class ChapterService {
     private final ChapterMapper chapterMapper;
 
     @Transactional(readOnly = true)
-    public List<ChapterDto> getChaptersByCourse(UUID courseId) {
-        if (!courseRepository.existsById(courseId)) {
-            throw new ResourceNotFoundException("Course not found with id: " + courseId);
+    public List<ChapterDto> getChaptersByCourse(String slug) {
+        if (!courseRepository.existsBySlug(slug)) {
+            throw new ResourceNotFoundException("Course not found with slug: " + slug);
         }
-        List<Chapter> chapters = chapterRepository.findByCourseIdWithLessonsOrderByPositionAsc(courseId);
+        List<Chapter> chapters = chapterRepository.findByCourseSlugWithLessonsOrderByPositionAsc(slug);
         return chapters.stream()
                 .map(chapterMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChapterPublicDto> getChaptersByCoursePublic(String slug) {
+        if (!courseRepository.existsBySlug(slug)) {
+            throw new ResourceNotFoundException("Course not found with slug: " + slug);
+        }
+        List<Chapter> chapters = chapterRepository.findByCourseSlugWithLessonsOrderByPositionAsc(slug);
+        return chapters.stream()
+                .map(chapterMapper::toPublicDto)
                 .collect(Collectors.toList());
     }
 
@@ -55,6 +70,7 @@ public class ChapterService {
 
         Chapter chapter = chapterMapper.toEntity(request);
         chapter.setCourse(course);
+        chapter.setSlug(generateUniqueSlug(request.getTitle()));
 
         chapter.setPosition(currentChapterCount + 1);
 
@@ -66,6 +82,7 @@ public class ChapterService {
     public ChapterDto updateChapter(UUID chapterId, ChapterRequest request) {
         Chapter chapter = findChapterById(chapterId);
         checkCourseOwnership(chapter.getCourse());
+        chapter.setSlug(generateUniqueSlug(request.getTitle()));
 
         chapterMapper.updateEntityFromRequest(request, chapter);
         Chapter updatedChapter = chapterRepository.save(chapter);
@@ -105,5 +122,16 @@ public class ChapterService {
     private Chapter findChapterById(UUID chapterId) {
         return chapterRepository.findById(chapterId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chapter not found with id: " + chapterId));
+    }
+
+    private String generateUniqueSlug(String title) {
+        String baseSlug = toSlug(title);
+        String slug = baseSlug;
+        int counter = 1;
+        while (chapterRepository.existsBySlug(slug)) {
+            slug = baseSlug + "-" + counter;
+            counter++;
+        }
+        return slug;
     }
 }

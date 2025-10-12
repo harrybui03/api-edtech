@@ -54,6 +54,27 @@ public class ReviewService {
     }
 
     @Transactional
+    public ReviewResponse createReviewBySlug(String courseSlug, ReviewRequest request) {
+        User currentUser = getCurrentUser();
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+
+        verifyEnrollment(course.getId(), currentUser.getId());
+
+        if (reviewRepository.existsByCourseIdAndStudentId(course.getId(), currentUser.getId())) {
+            throw new InvalidRequestDataException("You have already reviewed this course");
+        }
+
+        Review review = ReviewMapper.toEntity(request);
+        review.setCourse(course);
+        review.setStudent(currentUser);
+        review.setModifiedBy(currentUser.getId());
+
+        Review savedReview = reviewRepository.save(review);
+        return ReviewMapper.toResponse(savedReview);
+    }
+
+    @Transactional
     public ReviewResponse updateReview(UUID reviewId, ReviewRequest request) {
         User currentUser = getCurrentUser();
         Review review = findReviewById(reviewId);
@@ -85,7 +106,7 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public Page<ReviewResponse> getApprovedReviewsByCourseSlug(String courseSlug, Pageable pageable) {
-        Page<Review> reviews = reviewRepository.findByCourseSlugAndIsApprovedTrueOrderByCreationDesc(courseSlug, pageable);
+        Page<Review> reviews = reviewRepository.findByCourseSlugOrderByCreationDesc(courseSlug, pageable);
         return reviews.map(ReviewMapper::toResponse);
     }
 
@@ -98,6 +119,16 @@ public class ReviewService {
         return ReviewMapper.toResponse(review);
     }
 
+    @Transactional(readOnly = true)
+    public ReviewResponse getMyReviewForCourseSlug(String courseSlug) {
+        User currentUser = getCurrentUser();
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        Review review = reviewRepository.findByCourseIdAndStudentId(course.getId(), currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("You have not reviewed this course yet"));
+        return ReviewMapper.toResponse(review);
+    }
+
 
     @Transactional(readOnly = true)
     public Double getAverageRatingForCourse(UUID courseId) {
@@ -106,7 +137,13 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public long getReviewCountForCourse(UUID courseId) {
-        return reviewRepository.countByCourseIdAndIsApprovedTrue(courseId);
+        return reviewRepository.countByCourseId(courseId);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReviewResponse> getAllReviews(Pageable pageable) {
+        Page<Review> reviews = reviewRepository.findAllByOrderByCreationDesc(pageable);
+        return reviews.map(ReviewMapper::toResponse);
     }
 
     private User getCurrentUser() {
