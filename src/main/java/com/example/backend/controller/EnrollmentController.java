@@ -1,12 +1,15 @@
 package com.example.backend.controller;
 
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
+import com.example.backend.dto.response.payment.PaymentResponse;
 import com.example.backend.service.EnrollmentService;
+import com.example.backend.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,12 +22,39 @@ import java.util.UUID;
 public class EnrollmentController {
     
     private final EnrollmentService enrollmentService;
+    private final PaymentService paymentService;
     
-    @PostMapping("/courses/{courseId}/enroll")
-    @Operation(summary = "Enroll in a course", description = "Student enrolls in a specific course")
-    public ResponseEntity<EnrollmentResponse> enrollInCourse(@PathVariable UUID courseId) {
+    @PostMapping("/courses/{courseId}/enroll-free")
+    @Operation(summary = "Enroll in a free course", description = "Student enrolls in a free course without payment")
+    public ResponseEntity<EnrollmentResponse> enrollInFreeCourse(@PathVariable UUID courseId, Authentication authentication) {
+        // Check if course is free
+        if (enrollmentService.isPaidCourse(courseId)) {
+            throw new RuntimeException("This course requires payment. Please use the paid enrollment endpoint.");
+        }
+        
         EnrollmentResponse response = enrollmentService.enrollInCourse(courseId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+    
+    @PostMapping("/courses/{courseId}/enroll-paid")
+    @Operation(summary = "Enroll in a paid course", description = "Student enrolls in a paid course and creates payment request")
+    public ResponseEntity<PaymentResponse> enrollInPaidCourse(@PathVariable UUID courseId, 
+                                                             Authentication authentication) {
+        UUID studentId = UUID.fromString(authentication.getName());
+        
+        // Check if course is paid
+        if (!enrollmentService.isPaidCourse(courseId)) {
+            throw new RuntimeException("This course is free. Please use the free enrollment endpoint.");
+        }
+        
+        // Create payment request for paid course
+        com.example.backend.dto.request.payment.CreatePaymentRequest request = 
+            com.example.backend.dto.request.payment.CreatePaymentRequest.builder()
+                .courseId(courseId)
+                .build();
+        
+        PaymentResponse response = paymentService.createPayment(request, studentId);
+        return ResponseEntity.status(HttpStatus.OK).body(response);
     }
     
     @PostMapping("/courses/slug/{courseSlug}/enroll")
