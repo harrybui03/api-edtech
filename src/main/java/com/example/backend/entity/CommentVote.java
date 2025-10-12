@@ -1,6 +1,5 @@
 package com.example.backend.entity;
 
-import com.example.backend.constant.VoteType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -29,9 +28,8 @@ public class CommentVote {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "vote_type", nullable = false)
-    private VoteType voteType;
+    private Boolean voteType; // true = UPVOTE, false = DOWNVOTE
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

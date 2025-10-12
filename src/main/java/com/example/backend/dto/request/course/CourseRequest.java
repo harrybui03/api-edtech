@@ -24,6 +24,6 @@ public class CourseRequest {
     private String targetAudience;
     private String skillLevel;
     private String learnerProfileDesc;
-    private List<TagDto> tagDto;
-    private List<LabelDto> labelDto;
+    private List<TagDto> tag;
+    private List<LabelDto> label;
 }

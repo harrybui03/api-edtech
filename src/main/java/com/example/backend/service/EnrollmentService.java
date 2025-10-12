@@ -6,10 +6,12 @@ import com.example.backend.constant.EnrollmentRole;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.entity.Course;
 import com.example.backend.entity.Enrollment;
+import com.example.backend.entity.Lesson;
 import com.example.backend.entity.User;
 import com.example.backend.mapper.EnrollmentMapper;
 import com.example.backend.repository.CourseRepository;
 import com.example.backend.repository.EnrollmentRepository;
+import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,7 @@ public class EnrollmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final LessonRepository lessonRepository;
     private final EnrollmentMapper enrollmentMapper;
     
     public EnrollmentResponse enrollInCourse(UUID courseId) {
@@ -60,6 +63,18 @@ public class EnrollmentService {
         enrollment.setMemberType(EnrollmentMemberType.STUDENT);
         enrollment.setRole(EnrollmentRole.MEMBER);
         enrollment.setProgress(BigDecimal.ZERO);
+        
+        // Set current lesson to the first lesson of the course
+        List<Lesson> lessons = lessonRepository.findByCourseId(courseId);
+        if (!lessons.isEmpty()) {
+            // Sort lessons by chapter position and lesson position
+            lessons.sort((l1, l2) -> {
+                int chapterComparison = l1.getChapter().getPosition().compareTo(l2.getChapter().getPosition());
+                if (chapterComparison != 0) return chapterComparison;
+                return l1.getPosition().compareTo(l2.getPosition());
+            });
+            enrollment.setCurrentLesson(lessons.get(0));
+        }
         
         enrollment = enrollmentRepository.save(enrollment);
         
@@ -96,6 +111,18 @@ public class EnrollmentService {
         enrollment.setMemberType(EnrollmentMemberType.STUDENT);
         enrollment.setRole(EnrollmentRole.MEMBER);
         enrollment.setProgress(BigDecimal.ZERO);
+
+        // Set current lesson to the first lesson of the course
+        List<Lesson> lessons = lessonRepository.findByCourseId(course.getId());
+        if (!lessons.isEmpty()) {
+            // Sort lessons by chapter position and lesson position
+            lessons.sort((l1, l2) -> {
+                int chapterComparison = l1.getChapter().getPosition().compareTo(l2.getChapter().getPosition());
+                if (chapterComparison != 0) return chapterComparison;
+                return l1.getPosition().compareTo(l2.getPosition());
+            });
+            enrollment.setCurrentLesson(lessons.get(0));
+        }
 
         enrollment = enrollmentRepository.save(enrollment);
 

@@ -44,7 +44,7 @@ public final class CommentMapper {
                 .orElse(null);
             
             if (userVote != null) {
-                dto.setUserVote(userVote.getVoteType().name().toLowerCase());
+                dto.setUserVote(userVote.getVoteType() ? "upvote" : "downvote");
             }
         }
         
@@ -92,7 +92,7 @@ public final class CommentMapper {
                 .orElse(null);
             
             if (userVote != null) {
-                response.setUserVote(userVote.getVoteType().name().toLowerCase());
+                response.setUserVote(userVote.getVoteType() ? "upvote" : "downvote");
             }
         }
         

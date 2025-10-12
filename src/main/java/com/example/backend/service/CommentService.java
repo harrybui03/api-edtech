@@ -1,6 +1,5 @@
 package com.example.backend.service;
 
-import com.example.backend.constant.VoteType;
 import com.example.backend.dto.request.comment.CommentRequest;
 import com.example.backend.dto.response.comment.CommentResponse;
 import com.example.backend.entity.*;
@@ -17,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -93,10 +93,31 @@ public class CommentService {
         // Verify user has access to the lesson
         verifyLessonAccess(lesson, currentUser.getId());
 
-        Page<Comment> comments = commentRepository.findRootCommentsByLessonId(lessonId, pageable);
+        // Get all comments for the lesson (including replies)
+        List<Comment> allComments = commentRepository.findAllCommentsByLessonId(lessonId);
         List<CommentVote> allVotes = commentVoteRepository.findAllVotesByLessonId(lessonId);
         
-        return comments.map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes));
+        // Filter root comments (comments without parent)
+        List<Comment> rootComments = allComments.stream()
+                .filter(comment -> comment.getParent() == null)
+                .collect(Collectors.toList());
+        
+        // Apply pagination to root comments
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), rootComments.size());
+        List<Comment> paginatedRootComments = rootComments.subList(start, end);
+        
+        // Map to responses (replies will be included automatically via the mapper)
+        List<CommentResponse> responses = paginatedRootComments.stream()
+                .map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes))
+                .collect(Collectors.toList());
+        
+        // Create a Page object
+        return new org.springframework.data.domain.PageImpl<>(
+                responses, 
+                pageable, 
+                rootComments.size()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -107,10 +128,43 @@ public class CommentService {
 
         verifyLessonAccess(lesson, currentUser.getId());
 
-        Page<Comment> comments = commentRepository.findRootCommentsByLessonId(lesson.getId(), pageable);
+        // Get all comments for the lesson (including replies)
+        List<Comment> allComments = commentRepository.findAllCommentsByLessonId(lesson.getId());
         List<CommentVote> allVotes = commentVoteRepository.findAllVotesByLessonId(lesson.getId());
+        
+        // Filter root comments (comments without parent)
+        List<Comment> rootComments = allComments.stream()
+                .filter(comment -> comment.getParent() == null)
+                .collect(Collectors.toList());
+        
+        // Apply pagination to root comments
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), rootComments.size());
+        List<Comment> paginatedRootComments = rootComments.subList(start, end);
+        
+        // Map to responses (replies will be included automatically via the mapper)
+        List<CommentResponse> responses = paginatedRootComments.stream()
+                .map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes))
+                .collect(Collectors.toList());
+        
+        // Create a Page object
+        return new org.springframework.data.domain.PageImpl<>(
+                responses, 
+                pageable, 
+                rootComments.size()
+        );
+    }
 
-        return comments.map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes));
+    @Transactional(readOnly = true)
+    public CommentResponse getCommentById(UUID commentId) {
+        User currentUser = getCurrentUser();
+        Comment comment = findCommentById(commentId);
+        
+        // Verify user has access to the lesson
+        verifyLessonAccess(comment.getLesson(), currentUser.getId());
+        
+        List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(comment.getLesson().getId());
+        return CommentMapper.toResponse(comment, currentUser, votes);
     }
 
     @Transactional
@@ -174,7 +228,7 @@ public class CommentService {
     }
 
     @Transactional
-    public CommentResponse voteComment(UUID commentId, VoteType voteType) {
+    public CommentResponse voteComment(UUID commentId, Boolean isUpvote) {
         User currentUser = getCurrentUser();
         Comment comment = findCommentById(commentId);
         
@@ -186,12 +240,12 @@ public class CommentService {
                 .orElse(null);
 
         if (existingVote != null) {
-            if (existingVote.getVoteType() == voteType) {
+            if (existingVote.getVoteType().equals(isUpvote)) {
                 // Remove vote if clicking the same vote type
                 commentVoteRepository.delete(existingVote);
             } else {
                 // Change vote type
-                existingVote.setVoteType(voteType);
+                existingVote.setVoteType(isUpvote);
                 commentVoteRepository.save(existingVote);
             }
         } else {
@@ -199,7 +253,7 @@ public class CommentService {
             CommentVote newVote = CommentVote.builder()
                     .comment(comment)
                     .user(currentUser)
-                    .voteType(voteType)
+                    .voteType(isUpvote)
                     .build();
             commentVoteRepository.save(newVote);
         }
@@ -213,8 +267,8 @@ public class CommentService {
     }
     
     private void updateCommentVoteCounts(Comment comment) {
-        long upvotes = commentVoteRepository.countByCommentIdAndVoteType(comment.getId(), VoteType.UPVOTE);
-        long downvotes = commentVoteRepository.countByCommentIdAndVoteType(comment.getId(), VoteType.DOWNVOTE);
+        long upvotes = commentVoteRepository.countUpvotesByCommentId(comment.getId());
+        long downvotes = commentVoteRepository.countDownvotesByCommentId(comment.getId());
         
         comment.setUpvotes((int) upvotes);
         comment.setDownvotes((int) downvotes);

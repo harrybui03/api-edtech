@@ -103,8 +103,8 @@ public class CourseService {
         courseInstructor.setUser(currentUser);
         courseInstructorRepository.save(courseInstructor);
 
-        List<Tag> tags = upsertTags(request.getTagDto().stream().map(TagDto::getName).collect(Collectors.toList()), savedCourse.getId());
-        List<Label> labels = upsertLabels(request.getLabelDto().stream().map(LabelDto::getName).collect(Collectors.toList()), savedCourse.getId());
+        List<Tag> tags = upsertTags(request.getTag().stream().map(TagDto::getName).collect(Collectors.toList()), savedCourse.getId());
+        List<Label> labels = upsertLabels(request.getLabel().stream().map(LabelDto::getName).collect(Collectors.toList()), savedCourse.getId());
 
         return courseMapper.toDto(savedCourse, tags, labels);
     }
@@ -123,8 +123,8 @@ public class CourseService {
         tagRepository.deleteByEntityIdAndEntityType(courseId, EntityType.COURSE);
         labelRepository.deleteByEntityIdAndEntityType(courseId, EntityType.COURSE);
 
-        List<Tag> tags = upsertTags(request.getTagDto().stream().map(TagDto::getName).collect(Collectors.toList()), courseId);
-        List<Label> labels = upsertLabels(request.getLabelDto().stream().map(LabelDto::getName).collect(Collectors.toList()), courseId);
+        List<Tag> tags = upsertTags(request.getTag().stream().map(TagDto::getName).collect(Collectors.toList()), courseId);
+        List<Label> labels = upsertLabels(request.getLabel().stream().map(LabelDto::getName).collect(Collectors.toList()), courseId);
 
         Course updatedCourse = courseRepository.save(course);
         return courseMapper.toDto(updatedCourse, tags, labels);

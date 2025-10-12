@@ -1,6 +1,5 @@
 package com.example.backend.repository;
 
-import com.example.backend.constant.VoteType;
 import com.example.backend.entity.CommentVote;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -24,8 +23,16 @@ public interface CommentVoteRepository extends JpaRepository<CommentVote, UUID> 
     // Find all votes for a specific comment
     List<CommentVote> findByCommentId(UUID commentId);
 
+    // Count upvotes for a comment (voteType = true)
+    long countByCommentIdAndVoteType(UUID commentId, Boolean voteType);
+
     // Count upvotes for a comment
-    long countByCommentIdAndVoteType(UUID commentId, VoteType voteType);
+    @Query("SELECT COUNT(cv) FROM CommentVote cv WHERE cv.comment.id = :commentId AND cv.voteType = true")
+    long countUpvotesByCommentId(@Param("commentId") UUID commentId);
+
+    // Count downvotes for a comment
+    @Query("SELECT COUNT(cv) FROM CommentVote cv WHERE cv.comment.id = :commentId AND cv.voteType = false")
+    long countDownvotesByCommentId(@Param("commentId") UUID commentId);
 
     // Delete user's vote for a comment (for vote changes)
     void deleteByCommentIdAndUserId(UUID commentId, UUID userId);

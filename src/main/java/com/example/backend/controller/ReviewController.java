@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -73,6 +75,14 @@ public class ReviewController {
     public ResponseEntity<ReviewResponse> getMyReviewBySlug(@PathVariable String courseSlug) {
         ReviewResponse review = reviewService.getMyReviewForCourseSlug(courseSlug);
         return ResponseEntity.ok(review);
+    }
+
+    @GetMapping("/reviews")
+    @PreAuthorize("hasAnyRole('SYSTEM_MANAGER', 'MODERATOR')")
+    @Operation(summary = "Get all reviews", description = "Admin gets all reviews")
+    public ResponseEntity<Page<ReviewResponse>> getAllReviews(Pageable pageable) {
+        Page<ReviewResponse> reviews = reviewService.getAllReviews(pageable);
+        return ResponseEntity.ok(reviews);
     }
 
 }

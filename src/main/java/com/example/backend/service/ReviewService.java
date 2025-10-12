@@ -106,7 +106,7 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public Page<ReviewResponse> getApprovedReviewsByCourseSlug(String courseSlug, Pageable pageable) {
-        Page<Review> reviews = reviewRepository.findByCourseSlugAndIsApprovedTrueOrderByCreationDesc(courseSlug, pageable);
+        Page<Review> reviews = reviewRepository.findByCourseSlugOrderByCreationDesc(courseSlug, pageable);
         return reviews.map(ReviewMapper::toResponse);
     }
 
@@ -137,7 +137,13 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public long getReviewCountForCourse(UUID courseId) {
-        return reviewRepository.countByCourseIdAndIsApprovedTrue(courseId);
+        return reviewRepository.countByCourseId(courseId);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReviewResponse> getAllReviews(Pageable pageable) {
+        Page<Review> reviews = reviewRepository.findAllByOrderByCreationDesc(pageable);
+        return reviews.map(ReviewMapper::toResponse);
     }
 
     private User getCurrentUser() {

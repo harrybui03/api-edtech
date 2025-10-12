@@ -84,11 +84,19 @@ public class CommentController {
 
     @PostMapping("/comments/{commentId}/vote")
     @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
-    @Operation(summary = "Vote on comment", description = "Add, change, or toggle vote on a comment (UPVOTE or DOWNVOTE)")
+    @Operation(summary = "Vote on comment", description = "Add, change, or toggle vote on a comment (true = UPVOTE, false = DOWNVOTE)")
     public ResponseEntity<CommentResponse> voteComment(
             @PathVariable UUID commentId,
             @Valid @RequestBody VoteRequest request) {
-        CommentResponse comment = commentService.voteComment(commentId, request.getVoteType());
+        CommentResponse comment = commentService.voteComment(commentId, request.getIsUpvote());
+        return ResponseEntity.ok(comment);
+    }
+
+    @GetMapping("/comments/{commentId}")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
+    @Operation(summary = "Get comment by ID", description = "Get a specific comment by its ID (useful for replies)")
+    public ResponseEntity<CommentResponse> getCommentById(@PathVariable UUID commentId) {
+        CommentResponse comment = commentService.getCommentById(commentId);
         return ResponseEntity.ok(comment);
     }
 }

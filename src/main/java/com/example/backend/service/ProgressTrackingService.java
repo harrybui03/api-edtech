@@ -203,7 +203,17 @@ public class ProgressTrackingService {
                     .multiply(BigDecimal.valueOf(100));
             
             enrollment.setProgress(progress);
-            enrollmentRepository.save(enrollment);
         }
+        
+        // Set current lesson to the next incomplete lesson
+        List<Lesson> incompleteLessons = lessonRepository.findIncompleteLessonsByCourseIdAndMemberId(courseId, studentId);
+        if (!incompleteLessons.isEmpty()) {
+            enrollment.setCurrentLesson(incompleteLessons.get(0));
+        } else {
+            // All lessons completed, set current lesson to null
+            enrollment.setCurrentLesson(null);
+        }
+        
+        enrollmentRepository.save(enrollment);
     }
 }
