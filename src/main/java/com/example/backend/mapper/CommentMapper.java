@@ -9,7 +9,6 @@ import com.example.backend.entity.User;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public final class CommentMapper {
 
@@ -48,15 +47,8 @@ public final class CommentMapper {
             }
         }
         
-        // Map replies recursively
-        if (comment.getReplies() != null && !comment.getReplies().isEmpty()) {
-            dto.setReplies(comment.getReplies().stream()
-                .filter(reply -> !reply.getIsDeleted())
-                .map(reply -> toDto(reply, currentUser, votes))
-                .collect(Collectors.toList()));
-        } else {
-            dto.setReplies(Collections.emptyList());
-        }
+        // No replies field - use parentId to identify replies
+        dto.setReplies(Collections.emptyList());
         
         return dto;
     }
@@ -96,15 +88,8 @@ public final class CommentMapper {
             }
         }
         
-        // Map replies recursively
-        if (comment.getReplies() != null && !comment.getReplies().isEmpty()) {
-            response.setReplies(comment.getReplies().stream()
-                .filter(reply -> !reply.getIsDeleted())
-                .map(reply -> toResponse(reply, currentUser, votes))
-                .collect(Collectors.toList()));
-        } else {
-            response.setReplies(Collections.emptyList());
-        }
+        // No replies field - use parentId to identify replies
+        response.setReplies(Collections.emptyList());
         
         return response;
     }
@@ -127,6 +112,7 @@ public final class CommentMapper {
         }
         comment.setContent(request.getContent());
     }
+
 
     private static boolean isAdminUser(User user) {
         // You can implement this based on your user role system

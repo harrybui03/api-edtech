@@ -3,6 +3,7 @@ package com.example.backend.controller;
 import com.example.backend.dto.request.comment.CommentRequest;
 import com.example.backend.dto.request.comment.VoteRequest;
 import com.example.backend.dto.response.comment.CommentResponse;
+import com.example.backend.dto.response.comment.VoteResponse;
 import com.example.backend.service.CommentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -36,7 +38,7 @@ public class CommentController {
 
     @GetMapping("/lessons/{lessonId}/comments")
     @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR')")
-    @Operation(summary = "Get lesson comments", description = "Get all comments for a lesson with threading")
+    @Operation(summary = "Get lesson comments", description = "Get paginated comments for a lesson including replies (use parentId to identify replies)")
     public ResponseEntity<Page<CommentResponse>> getCommentsForLesson(
             @PathVariable UUID lessonId,
             Pageable pageable) {
@@ -99,4 +101,23 @@ public class CommentController {
         CommentResponse comment = commentService.getCommentById(commentId);
         return ResponseEntity.ok(comment);
     }
+
+    @GetMapping("/users/{userId}/votes")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR', 'SYSTEM_MANAGER', 'MODERATOR')")
+    @Operation(summary = "Get votes by user ID", description = "Get all votes made by a specific user (users can only view their own votes)")
+    public ResponseEntity<List<VoteResponse>> getVotesByUserId(@PathVariable UUID userId) {
+        List<VoteResponse> votes = commentService.getVotesByUserId(userId);
+        return ResponseEntity.ok(votes);
+    }
+
+    @GetMapping("/users/{userId}/lessons/{lessonId}/votes")
+    @PreAuthorize("hasAnyRole('LMS_STUDENT', 'COURSE_CREATOR', 'SYSTEM_MANAGER', 'MODERATOR')")
+    @Operation(summary = "Get votes by user ID and lesson ID", description = "Get all votes made by a specific user for comments in a specific lesson")
+    public ResponseEntity<List<VoteResponse>> getVotesByUserIdAndLessonId(
+            @PathVariable UUID userId,
+            @PathVariable UUID lessonId) {
+        List<VoteResponse> votes = commentService.getVotesByUserIdAndLessonId(userId, lessonId);
+        return ResponseEntity.ok(votes);
+    }
+
 }

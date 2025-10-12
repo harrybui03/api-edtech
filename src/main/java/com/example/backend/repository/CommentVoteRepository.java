@@ -39,4 +39,11 @@ public interface CommentVoteRepository extends JpaRepository<CommentVote, UUID> 
 
     // Check if user has already voted for a comment
     boolean existsByCommentIdAndUserId(UUID commentId, UUID userId);
+
+    // Find all votes by a specific user
+    List<CommentVote> findByUserId(UUID userId);
+
+    // Find all votes by a specific user for comments in a lesson
+    @Query("SELECT cv FROM CommentVote cv WHERE cv.user.id = :userId AND cv.comment.lesson.id = :lessonId")
+    List<CommentVote> findByUserIdAndLessonId(@Param("userId") UUID userId, @Param("lessonId") UUID lessonId);
 }

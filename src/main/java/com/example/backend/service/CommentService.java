@@ -2,6 +2,7 @@ package com.example.backend.service;
 
 import com.example.backend.dto.request.comment.CommentRequest;
 import com.example.backend.dto.response.comment.CommentResponse;
+import com.example.backend.dto.response.comment.VoteResponse;
 import com.example.backend.entity.*;
 import com.example.backend.excecption.ForbiddenException;
 import com.example.backend.excecption.ResourceNotFoundException;
@@ -14,8 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -97,18 +97,13 @@ public class CommentService {
         List<Comment> allComments = commentRepository.findAllCommentsByLessonId(lessonId);
         List<CommentVote> allVotes = commentVoteRepository.findAllVotesByLessonId(lessonId);
         
-        // Filter root comments (comments without parent)
-        List<Comment> rootComments = allComments.stream()
-                .filter(comment -> comment.getParent() == null)
-                .collect(Collectors.toList());
-        
-        // Apply pagination to root comments
+        // Apply pagination to all comments
         int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), rootComments.size());
-        List<Comment> paginatedRootComments = rootComments.subList(start, end);
+        int end = Math.min((start + pageable.getPageSize()), allComments.size());
+        List<Comment> paginatedComments = allComments.subList(start, end);
         
-        // Map to responses (replies will be included automatically via the mapper)
-        List<CommentResponse> responses = paginatedRootComments.stream()
+        // Map to responses (parentId will indicate if it's a reply)
+        List<CommentResponse> responses = paginatedComments.stream()
                 .map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes))
                 .collect(Collectors.toList());
         
@@ -116,7 +111,7 @@ public class CommentService {
         return new org.springframework.data.domain.PageImpl<>(
                 responses, 
                 pageable, 
-                rootComments.size()
+                allComments.size()
         );
     }
 
@@ -132,18 +127,13 @@ public class CommentService {
         List<Comment> allComments = commentRepository.findAllCommentsByLessonId(lesson.getId());
         List<CommentVote> allVotes = commentVoteRepository.findAllVotesByLessonId(lesson.getId());
         
-        // Filter root comments (comments without parent)
-        List<Comment> rootComments = allComments.stream()
-                .filter(comment -> comment.getParent() == null)
-                .collect(Collectors.toList());
-        
-        // Apply pagination to root comments
+        // Apply pagination to all comments
         int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), rootComments.size());
-        List<Comment> paginatedRootComments = rootComments.subList(start, end);
+        int end = Math.min((start + pageable.getPageSize()), allComments.size());
+        List<Comment> paginatedComments = allComments.subList(start, end);
         
-        // Map to responses (replies will be included automatically via the mapper)
-        List<CommentResponse> responses = paginatedRootComments.stream()
+        // Map to responses (parentId will indicate if it's a reply)
+        List<CommentResponse> responses = paginatedComments.stream()
                 .map(comment -> CommentMapper.toResponse(comment, currentUser, allVotes))
                 .collect(Collectors.toList());
         
@@ -151,7 +141,7 @@ public class CommentService {
         return new org.springframework.data.domain.PageImpl<>(
                 responses, 
                 pageable, 
-                rootComments.size()
+                allComments.size()
         );
     }
 
@@ -166,6 +156,7 @@ public class CommentService {
         List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(comment.getLesson().getId());
         return CommentMapper.toResponse(comment, currentUser, votes);
     }
+
 
     @Transactional
     public CommentResponse updateComment(UUID commentId, CommentRequest request) {
@@ -243,10 +234,28 @@ public class CommentService {
             if (existingVote.getVoteType().equals(isUpvote)) {
                 // Remove vote if clicking the same vote type
                 commentVoteRepository.delete(existingVote);
+                // Decrease the corresponding vote count
+                if (isUpvote) {
+                    comment.setUpvotes(Math.max(0, comment.getUpvotes() - 1));
+                } else {
+                    comment.setDownvotes(Math.max(0, comment.getDownvotes() - 1));
+                }
             } else {
-                // Change vote type
+                // Change vote type - need to adjust both counts
+                Boolean oldVoteType = existingVote.getVoteType();
                 existingVote.setVoteType(isUpvote);
                 commentVoteRepository.save(existingVote);
+                
+                // Decrease old vote count and increase new vote count
+                if (oldVoteType) {
+                    // Was upvote, now downvote
+                    comment.setUpvotes(Math.max(0, comment.getUpvotes() - 1));
+                    comment.setDownvotes(comment.getDownvotes() + 1);
+                } else {
+                    // Was downvote, now upvote
+                    comment.setDownvotes(Math.max(0, comment.getDownvotes() - 1));
+                    comment.setUpvotes(comment.getUpvotes() + 1);
+                }
             }
         } else {
             // Create new vote
@@ -256,22 +265,71 @@ public class CommentService {
                     .voteType(isUpvote)
                     .build();
             commentVoteRepository.save(newVote);
+            
+            // Increase the corresponding vote count
+            if (isUpvote) {
+                comment.setUpvotes(comment.getUpvotes() + 1);
+            } else {
+                comment.setDownvotes(comment.getDownvotes() + 1);
+            }
         }
 
-        // Update vote counts
-        updateCommentVoteCounts(comment);
+        // Save the comment with updated vote counts
         Comment updatedComment = commentRepository.save(comment);
         
         List<CommentVote> votes = commentVoteRepository.findAllVotesByLessonId(comment.getLesson().getId());
         return CommentMapper.toResponse(updatedComment, currentUser, votes);
     }
     
-    private void updateCommentVoteCounts(Comment comment) {
-        long upvotes = commentVoteRepository.countUpvotesByCommentId(comment.getId());
-        long downvotes = commentVoteRepository.countDownvotesByCommentId(comment.getId());
+
+    @Transactional(readOnly = true)
+    public List<VoteResponse> getVotesByUserId(UUID userId) {
+        User currentUser = getCurrentUser();
         
-        comment.setUpvotes((int) upvotes);
-        comment.setDownvotes((int) downvotes);
+        // Check if user is requesting their own votes or is admin
+        boolean canView = currentUser.getId().equals(userId) || isAdminUser(currentUser);
+        if (!canView) {
+            throw new ForbiddenException("You can only view your own votes");
+        }
+        
+        List<CommentVote> votes = commentVoteRepository.findByUserId(userId);
+        return votes.stream()
+                .map(this::mapToVoteResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<VoteResponse> getVotesByUserIdAndLessonId(UUID userId, UUID lessonId) {
+        User currentUser = getCurrentUser();
+        
+        // Check if user is requesting their own votes or is admin
+        boolean canView = currentUser.getId().equals(userId) || isAdminUser(currentUser);
+        if (!canView) {
+            throw new ForbiddenException("You can only view your own votes");
+        }
+        
+        // Verify user has access to the lesson
+        Lesson lesson = findLessonById(lessonId);
+        verifyLessonAccess(lesson, currentUser.getId());
+        
+        List<CommentVote> votes = commentVoteRepository.findByUserIdAndLessonId(userId, lessonId);
+        return votes.stream()
+                .map(this::mapToVoteResponse)
+                .collect(Collectors.toList());
+    }
+
+    private VoteResponse mapToVoteResponse(CommentVote vote) {
+        return VoteResponse.builder()
+                .id(vote.getId())
+                .commentId(vote.getComment().getId())
+                .commentContent(vote.getComment().getContent())
+                .lessonId(vote.getComment().getLesson().getId())
+                .lessonTitle(vote.getComment().getLesson().getTitle())
+                .userId(vote.getUser().getId())
+                .userName(vote.getUser().getFullName())
+                .isUpvote(vote.getVoteType())
+                .creation(vote.getCreation())
+                .build();
     }
 
     private boolean isAdminUser(User user) {
