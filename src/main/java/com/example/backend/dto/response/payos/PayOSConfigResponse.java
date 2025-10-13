@@ -18,6 +18,8 @@ public class PayOSConfigResponse {
     private UUID instructorId;
     private String instructorName;
     private String clientId;
+    private String apiKey;
+    private String checksumKey;
     private String accountNumber;
     private Boolean isActive;
     private OffsetDateTime createdAt;

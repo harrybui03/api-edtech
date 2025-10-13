@@ -2,13 +2,17 @@ package com.example.backend.service;
 
 import com.example.backend.entity.PayOSConfig;
 import com.example.backend.entity.Transaction;
+import vn.payos.PayOS;
+import vn.payos.type.CheckoutResponseData;
+import vn.payos.type.ItemData;
+import vn.payos.type.PaymentData;
+import vn.payos.type.Webhook;
+import vn.payos.type.WebhookData;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -16,15 +20,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class PayOSIntegrationService {
 
-    private final RestTemplate restTemplate;
+    // Using PayOS SDK instead of RestTemplate
     private final ObjectMapper objectMapper;
 
     @Value("${app.base-url:http://localhost:8080}")
@@ -34,34 +36,43 @@ public class PayOSIntegrationService {
         log.info("Creating PayOS payment request for transaction: {}", transaction.getOrderCode());
 
         try {
-            String url = "https://api-merchant.payos.vn/v2/payment-requests";
+            // Use PayOS Java SDK
+            PayOS payOS = new PayOS(
+                    config.getClientId(),
+                    config.getApiKey(),
+                    config.getChecksumKey()
+            );
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("orderCode", transaction.getOrderCode());
-            requestBody.put("amount", transaction.getAmount().intValue());
-            requestBody.put("description", transaction.getDescription());
-            requestBody.put("items", createItems(transaction));
-            requestBody.put("returnUrl", transaction.getReturnUrl());
-            requestBody.put("cancelUrl", transaction.getCancelUrl());
-            requestBody.put("accountNumber", config.getAccountNumber());
+            ItemData item = ItemData.builder()
+                    .name(transaction.getCourse().getTitle())
+                    .quantity(1)
+                    .price(transaction.getAmount().intValue())
+                    .build();
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("x-client-id", config.getClientId());
-            headers.set("x-api-key", config.getApiKey());
+            String description = transaction.getDescription();
+            String shortDescription = description != null && description.length() > 25
+                    ? description.substring(0, 25)
+                    : description;
 
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+            PaymentData paymentData = PaymentData.builder()
+                    .orderCode(transaction.getOrderCode())
+                    .amount(transaction.getAmount().intValue())
+                    .description(shortDescription)
+                    .returnUrl(transaction.getReturnUrl())
+                    .cancelUrl(transaction.getCancelUrl())
+                    .item(item) // or .items(List.of(item)) depending on SDK version
+                    .build();
 
-            ResponseEntity<PayOSPaymentResponse> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, PayOSPaymentResponse.class);
+            CheckoutResponseData sdkRes = payOS.createPaymentLink(paymentData);
 
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                log.info("PayOS payment request created successfully for order: {}", transaction.getOrderCode());
-                return response.getBody();
-            } else {
-                log.error("Failed to create PayOS payment request. Status: {}", response.getStatusCode());
-                throw new RuntimeException("Failed to create PayOS payment request");
-            }
+            PayOSPaymentResponse res = new PayOSPaymentResponse();
+            res.setCode("00");
+            res.setMessage("success");
+            PayOSPaymentResponse.Data data = new PayOSPaymentResponse.Data();
+            data.setPaymentId(sdkRes.getPaymentLinkId());
+            data.setPaymentUrl(sdkRes.getCheckoutUrl());
+            res.setData(data);
+            return res;
 
         } catch (Exception e) {
             log.error("Error creating PayOS payment request: {}", e.getMessage(), e);
@@ -79,13 +90,30 @@ public class PayOSIntegrationService {
         }
     }
 
-    private Map<String, Object> createItems(Transaction transaction) {
-        Map<String, Object> item = new HashMap<>();
-        item.put("name", transaction.getCourse().getTitle());
-        item.put("quantity", 1);
-        item.put("price", transaction.getAmount().intValue());
+    // Verify webhook using SDK and return code ("00" success)
+    public String verifyWebhookAndGetCode(String rawBody, PayOSConfig config) {
+        try {
+            PayOS payOS = new PayOS(config.getClientId(), config.getApiKey(), config.getChecksumKey());
 
-        return Map.of("items", new Object[]{item});
+            // Normalize payload to satisfy SDK schema (fill missing required fields)
+            com.fasterxml.jackson.databind.node.ObjectNode root = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(rawBody);
+            com.fasterxml.jackson.databind.node.ObjectNode data = (com.fasterxml.jackson.databind.node.ObjectNode) root.with("data");
+
+            if (!data.hasNonNull("reference")) data.put("reference", "TF000000000000");
+            if (!data.has("accountNumber")) data.put("accountNumber", "");
+            if (!data.has("currency")) data.put("currency", "VND");
+            if (!data.has("paymentLinkId")) data.put("paymentLinkId", "");
+            if (!data.has("transactionDateTime")) data.put("transactionDateTime", "1970-01-01 00:00:00");
+            if (!data.has("code")) data.put("code", "00");
+            if (!data.has("desc")) data.put("desc", "success");
+
+            Webhook webhook = objectMapper.treeToValue(root, Webhook.class);
+            WebhookData webhookData = payOS.verifyPaymentWebhookData(webhook);
+            return webhookData.getCode();
+        } catch (Exception e) {
+            log.error("SDK webhook verify failed: {}", e.getMessage(), e);
+            throw new RuntimeException("SDK webhook verify failed: " + e.getMessage());
+        }
     }
 
     private String generateHmacSha256(String data, String key) throws NoSuchAlgorithmException, InvalidKeyException {

@@ -28,20 +28,19 @@ public class PayOSConfigService {
     @Transactional
     public PayOSConfigResponse createPayOSConfig(CreatePayOSConfigRequest request) {
         User currentUser = getCurrentUser();
+        
         // Validate instructor exists
         User instructor = userRepository.findById(currentUser.getId())
                 .orElseThrow(() -> new DataNotFoundException("Instructor not found with id: " + currentUser.getId()));
 
-        // Check if instructor already has an active config
-        if (payOSConfigRepository.existsActiveByInstructorId(currentUser.getId())) {
-            throw new InvalidRequestDataException("Instructor already has an active PayOS configuration");
-        }
-
-        // Deactivate any existing configs for this instructor
+        // Deactivate any existing active configs for this instructor
         payOSConfigRepository.findByInstructorId(currentUser.getId())
                 .ifPresent(existingConfig -> {
-                    existingConfig.setIsActive(false);
-                    payOSConfigRepository.save(existingConfig);
+                    if (Boolean.TRUE.equals(existingConfig.getIsActive())) {
+                        existingConfig.setIsActive(false);
+                        payOSConfigRepository.save(existingConfig);
+                        log.info("Deactivated existing PayOS config for instructor: {}", currentUser.getId());
+                    }
                 });
 
         // Create new config
@@ -81,6 +80,8 @@ public class PayOSConfigService {
                 .instructorId(config.getInstructor().getId())
                 .instructorName(config.getInstructor().getFullName())
                 .clientId(config.getClientId())
+                .apiKey(config.getApiKey())
+                .checksumKey(config.getChecksumKey())
                 .accountNumber(config.getAccountNumber())
                 .isActive(config.getIsActive())
                 .createdAt(config.getCreatedAt())

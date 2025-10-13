@@ -23,7 +23,7 @@ public class Transaction {
     private UUID id;
 
     @Column(name = "order_code", unique = true, nullable = false)
-    private String orderCode;
+    private Long orderCode;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_id", nullable = false)

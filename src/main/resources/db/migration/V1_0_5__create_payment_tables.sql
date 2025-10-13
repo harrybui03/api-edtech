@@ -1,5 +1,8 @@
 -- Create PayOS Config and Transaction tables for payment functionality
 
+-- 0. CREATE SEQUENCE for order_code
+CREATE SEQUENCE IF NOT EXISTS order_code_seq START WITH 1 INCREMENT BY 1;
+
 -- 1. CREATE PAYOS_CONFIGS TABLE
 CREATE TABLE payos_configs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -19,7 +22,7 @@ CREATE TABLE payos_configs (
 -- 2. CREATE TRANSACTIONS TABLE
 CREATE TABLE transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_code VARCHAR(255) UNIQUE NOT NULL,
+    order_code BIGINT UNIQUE NOT NULL DEFAULT nextval('order_code_seq'),
     student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     instructor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -65,7 +68,7 @@ COMMENT ON COLUMN payos_configs.account_number IS 'PayOS account number for rece
 COMMENT ON COLUMN payos_configs.is_active IS 'Whether this config is currently active';
 
 COMMENT ON TABLE transactions IS 'Payment transactions for course enrollments';
-COMMENT ON COLUMN transactions.order_code IS 'Unique order code for the transaction';
+COMMENT ON COLUMN transactions.order_code IS 'Auto-incrementing numeric order code for the transaction';
 COMMENT ON COLUMN transactions.student_id IS 'Reference to the student user';
 COMMENT ON COLUMN transactions.instructor_id IS 'Reference to the instructor user';
 COMMENT ON COLUMN transactions.course_id IS 'Reference to the course being purchased';

@@ -1,7 +1,5 @@
 package com.example.backend.service;
 
-import com.example.backend.dto.request.payment.CreatePaymentRequest;
-import com.example.backend.dto.request.payment.PayOSWebhookRequest;
 import com.example.backend.dto.response.payment.PaymentResponse;
 import com.example.backend.dto.response.payment.TransactionListResponse;
 import com.example.backend.entity.*;
@@ -11,6 +9,7 @@ import com.example.backend.repository.TransactionRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.excecption.DataNotFoundException;
 import com.example.backend.excecption.InvalidRequestDataException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,12 +45,14 @@ public class PaymentService {
     private String baseUrl;
 
     @Transactional
-    public PaymentResponse createPayment(CreatePaymentRequest request, UUID studentId) {
-        log.info("Creating payment for student: {} and course: {}", studentId, request.getCourseId());
+    public PaymentResponse createPayment(UUID courseId) {
+        // Get current user
+        User student = getCurrentUser();
+        log.info("Creating payment for student: {} and course: {}", student.getId(), courseId);
 
         // Validate course exists and is paid
-        Course course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> new DataNotFoundException("Course not found with id: " + request.getCourseId()));
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new DataNotFoundException("Course not found with id: " + courseId));
 
         if (!Boolean.TRUE.equals(course.getPaidCourse())) {
             throw new InvalidRequestDataException("Course is not a paid course");
@@ -61,18 +62,14 @@ public class PaymentService {
             throw new InvalidRequestDataException("Course price is not set or invalid");
         }
 
-        // Validate student exists
-        User student = userRepository.findById(studentId)
-                .orElseThrow(() -> new DataNotFoundException("Student not found with id: " + studentId));
-
         // Get course instructor
         User instructor = course.getInstructors().stream()
                 .findFirst()
                 .map(CourseInstructor::getUser)
-                .orElseThrow(() -> new DataNotFoundException("No instructor found for course: " + request.getCourseId()));
+                .orElseThrow(() -> new DataNotFoundException("No instructor found for course: " + courseId));
 
         // Check if student already enrolled
-        if (transactionRepository.countPaidTransactionsByStudentAndCourse(studentId, request.getCourseId()) > 0) {
+        if (transactionRepository.countPaidTransactionsByStudentAndCourse(student.getId(), courseId) > 0) {
             throw new InvalidRequestDataException("Student is already enrolled in this course");
         }
 
@@ -80,17 +77,13 @@ public class PaymentService {
         PayOSConfig payOSConfig = payOSConfigRepository.findByInstructorId(instructor.getId())
                 .orElseThrow(() -> new DataNotFoundException("No PayOS configuration found for instructor: " + instructor.getId()));
 
-        // Generate unique order code
-        String orderCode = generateOrderCode();
-
-        // Create transaction with default URLs if not provided
-        String returnUrl = request.getReturnUrl() != null ? request.getReturnUrl() : 
-            baseUrl + "/payment/success?orderCode=" + orderCode;
-        String cancelUrl = request.getCancelUrl() != null ? request.getCancelUrl() : 
-            baseUrl + "/payment/cancel?orderCode=" + orderCode;
+        // Pre-generate numeric order code from DB sequence to avoid nulls
+        Long generatedOrderCode = transactionRepository.nextOrderCode();
+        String returnUrlPrefix = baseUrl + "/payment/success?orderCode=";
+        String cancelUrlPrefix = baseUrl + "/payment/cancel?orderCode=";
             
         Transaction transaction = Transaction.builder()
-                .orderCode(orderCode)
+                .orderCode(generatedOrderCode)
                 .student(student)
                 .instructor(instructor)
                 .course(course)
@@ -98,24 +91,38 @@ public class PaymentService {
                 .currency(course.getCurrency() != null ? course.getCurrency() : "VND")
                 .status(Transaction.TransactionStatus.PENDING)
                 .description("Payment for course: " + course.getTitle())
-                .returnUrl(returnUrl)
-                .cancelUrl(cancelUrl)
                 .accountNumber(payOSConfig.getAccountNumber())
                 .webhookReceived(false)
                 .build();
 
+        transaction = transactionRepository.save(transaction);
+        // Reload to get DB-generated orderCode (BIGINT default from sequence)
+        transaction = transactionRepository.findById(transaction.getId())
+                .orElseThrow(() -> new DataNotFoundException("Transaction not found after save"));
+
+        // Update URLs with the orderCode
+        String orderCode = String.valueOf(transaction.getOrderCode());
+        transaction.setReturnUrl(returnUrlPrefix + orderCode);
+        transaction.setCancelUrl(cancelUrlPrefix + orderCode);
         transaction = transactionRepository.save(transaction);
 
         // Create PayOS payment request
         try {
             PayOSIntegrationService.PayOSPaymentResponse payOSResponse = payOSIntegrationService.createPaymentRequest(payOSConfig, transaction);
             
-            // Update transaction with PayOS response
-            transaction.setPaymentId(payOSResponse.getData().getPaymentId());
-            transaction.setPaymentUrl(payOSResponse.getData().getPaymentUrl());
-            transaction = transactionRepository.save(transaction);
+            // Check PayOS response
+            if (payOSResponse.getData() != null) {
+                // Update transaction with PayOS response data
+                transaction.setPaymentId(payOSResponse.getData().getPaymentId());
+                transaction.setPaymentUrl(payOSResponse.getData().getPaymentUrl());
+                transaction = transactionRepository.save(transaction);
+                log.info("Payment created successfully for order: {} with PayOS data", orderCode);
+            } else {
+                // PayOS response has no data, but payment request was created
+                log.warn("PayOS response has no data for order: {}, code: {}, message: {}", 
+                        orderCode, payOSResponse.getCode(), payOSResponse.getMessage());
+            }
 
-            log.info("Payment created successfully for order: {}", orderCode);
             return mapToResponse(transaction);
 
         } catch (Exception e) {
@@ -127,49 +134,45 @@ public class PaymentService {
     public PaymentResponse getPaymentStatus(String orderCode) {
         log.info("Getting payment status for order: {}", orderCode);
 
-        Transaction transaction = transactionRepository.findByOrderCode(orderCode)
+        Long numericOrderCode;
+        try {
+            numericOrderCode = Long.valueOf(orderCode);
+        } catch (NumberFormatException ex) {
+            throw new DataNotFoundException("Invalid order code format");
+        }
+
+        Transaction transaction = transactionRepository.findByOrderCode(numericOrderCode)
                 .orElseThrow(() -> new DataNotFoundException("Transaction not found with order code: " + orderCode));
 
         return mapToResponse(transaction);
     }
 
     @Transactional
-    public void handlePayOSWebhook(PayOSWebhookRequest webhookRequest, String signature) {
-        log.info("Handling PayOS webhook for order: {}", webhookRequest.getData().getOrderCode());
+    public void handlePayOSWebhook(String rawBody, String signature) {
+        log.info("Handling PayOS webhook raw body");
 
         try {
+            // Verify webhook using SDK via integration service (use any config to decode)
+            PayOSConfig anyConfig = payOSConfigRepository.findAll().stream().findFirst()
+                    .orElseThrow(() -> new DataNotFoundException("No PayOS configuration available"));
+            String sdkCode = payOSIntegrationService.verifyWebhookAndGetCode(rawBody, anyConfig);
+
+            // Extract orderCode from raw body
+            com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(rawBody);
+            Long oc = node.path("data").path("orderCode").asLong();
+
             // Find transaction
-            Transaction transaction = transactionRepository.findByOrderCode(webhookRequest.getData().getOrderCode())
-                    .orElseThrow(() -> new DataNotFoundException("Transaction not found with order code: " + webhookRequest.getData().getOrderCode()));
+            Transaction transaction = transactionRepository.findByOrderCode(oc)
+                    .orElseThrow(() -> new DataNotFoundException("Not Found"));
 
-            // Get PayOS config for signature verification
-            PayOSConfig payOSConfig = payOSConfigRepository.findByInstructorId(transaction.getInstructor().getId())
-                    .orElseThrow(() -> new DataNotFoundException("No PayOS configuration found for instructor: " + transaction.getInstructor().getId()));
-
-            // Verify webhook signature
-            String webhookBody = objectMapper.writeValueAsString(webhookRequest);
-            if (!payOSIntegrationService.verifyWebhookSignature(signature, webhookBody, payOSConfig.getChecksumKey())) {
-                log.error("Invalid webhook signature for order: {}", webhookRequest.getData().getOrderCode());
-                throw new RuntimeException("Invalid webhook signature");
-            }
-
-            // Update transaction status
-            String status = webhookRequest.getData().getStatus();
-            if ("PAID".equals(status)) {
+            if ("00".equals(sdkCode)) {
                 transaction.setStatus(Transaction.TransactionStatus.PAID);
                 transaction.setPaidAt(OffsetDateTime.now());
-                
-                // Create enrollment
                 enrollmentService.createEnrollment(transaction.getStudent().getId(), transaction.getCourse().getId());
-                
-                // Send notification emails
                 sendPaymentSuccessNotifications(transaction);
-                
-            } else if ("CANCELLED".equals(status) || "EXPIRED".equals(status)) {
+            } else {
                 transaction.setStatus(Transaction.TransactionStatus.FAILED);
                 transaction.setFailedAt(OffsetDateTime.now());
-                
-                // Send payment failure notification
                 sendPaymentFailureNotification(transaction);
             }
 
@@ -177,7 +180,7 @@ public class PaymentService {
             transaction.setWebhookSignature(signature);
             transactionRepository.save(transaction);
 
-            log.info("Webhook processed successfully for order: {}", webhookRequest.getData().getOrderCode());
+            log.info("Webhook processed successfully for order: {}", oc);
 
         } catch (Exception e) {
             log.error("Error processing PayOS webhook: {}", e.getMessage(), e);
@@ -225,14 +228,11 @@ public class PaymentService {
                 .build();
     }
 
-    private String generateOrderCode() {
-        return "ORDER_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
-    }
 
     private PaymentResponse mapToResponse(Transaction transaction) {
         return PaymentResponse.builder()
                 .id(transaction.getId())
-                .orderCode(transaction.getOrderCode())
+                .orderCode(String.valueOf(transaction.getOrderCode()))
                 .studentId(transaction.getStudent().getId())
                 .studentName(transaction.getStudent().getFullName())
                 .instructorId(transaction.getInstructor().getId())
@@ -259,7 +259,7 @@ public class PaymentService {
     private TransactionListResponse.TransactionSummaryResponse mapToSummaryResponse(Transaction transaction) {
         return TransactionListResponse.TransactionSummaryResponse.builder()
                 .id(transaction.getId().toString())
-                .orderCode(transaction.getOrderCode())
+                .orderCode(String.valueOf(transaction.getOrderCode()))
                 .studentName(transaction.getStudent().getFullName())
                 .instructorName(transaction.getInstructor().getFullName())
                 .courseTitle(transaction.getCourse().getTitle())
@@ -286,5 +286,11 @@ public class PaymentService {
     private void sendPaymentFailureNotification(Transaction transaction) {
         // Send email to student
         emailService.sendPaymentFailureEmail(transaction.getStudent().getEmail(), transaction);
+    }
+
+    private User getCurrentUser() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new DataNotFoundException("User not found with email: " + email));
     }
 }
