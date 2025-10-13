@@ -14,10 +14,13 @@ import java.util.UUID;
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
 
-    Optional<Transaction> findByOrderCode(String orderCode);
+    Optional<Transaction> findByOrderCode(Long orderCode);
 
     @Query("SELECT t FROM Transaction t WHERE t.orderCode = :orderCode")
-    Optional<Transaction> findByOrderCodeWithDetails(@Param("orderCode") String orderCode);
+    Optional<Transaction> findByOrderCodeWithDetails(@Param("orderCode") Long orderCode);
+
+    @Query(value = "SELECT nextval('order_code_seq')", nativeQuery = true)
+    Long nextOrderCode();
 
     @Query("SELECT t FROM Transaction t WHERE t.student.id = :studentId")
     Page<Transaction> findByStudentId(@Param("studentId") UUID studentId, Pageable pageable);

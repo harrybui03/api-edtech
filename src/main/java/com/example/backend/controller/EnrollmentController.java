@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,8 +25,7 @@ public class EnrollmentController {
     
     @PostMapping("/courses/{courseId}/enroll-free")
     @Operation(summary = "Enroll in a free course", description = "Student enrolls in a free course without payment")
-    public ResponseEntity<EnrollmentResponse> enrollInFreeCourse(@PathVariable UUID courseId, Authentication authentication) {
-        // Check if course is free
+    public ResponseEntity<EnrollmentResponse> enrollInFreeCourse(@PathVariable UUID courseId) {
         if (enrollmentService.isPaidCourse(courseId)) {
             throw new RuntimeException("This course requires payment. Please use the paid enrollment endpoint.");
         }
@@ -38,22 +36,13 @@ public class EnrollmentController {
     
     @PostMapping("/courses/{courseId}/enroll-paid")
     @Operation(summary = "Enroll in a paid course", description = "Student enrolls in a paid course and creates payment request")
-    public ResponseEntity<PaymentResponse> enrollInPaidCourse(@PathVariable UUID courseId, 
-                                                             Authentication authentication) {
-        UUID studentId = UUID.fromString(authentication.getName());
+    public ResponseEntity<PaymentResponse> enrollInPaidCourse(@PathVariable UUID courseId) {
         
-        // Check if course is paid
         if (!enrollmentService.isPaidCourse(courseId)) {
             throw new RuntimeException("This course is free. Please use the free enrollment endpoint.");
         }
         
-        // Create payment request for paid course
-        com.example.backend.dto.request.payment.CreatePaymentRequest request = 
-            com.example.backend.dto.request.payment.CreatePaymentRequest.builder()
-                .courseId(courseId)
-                .build();
-        
-        PaymentResponse response = paymentService.createPayment(request, studentId);
+        PaymentResponse response = paymentService.createPayment(courseId);
         return ResponseEntity.status(HttpStatus.OK).body(response);
     }
     
@@ -70,4 +59,5 @@ public class EnrollmentController {
         List<EnrollmentResponse> enrollments = enrollmentService.getMyEnrollments();
         return ResponseEntity.ok(enrollments);
     }
+
 }
