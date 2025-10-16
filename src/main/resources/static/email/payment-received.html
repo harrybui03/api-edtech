@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Received</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #222; }
+        .container { max-width: 640px; margin: 0 auto; padding: 16px; }
+        h2 { color: #0284c7; }
+        ul { padding-left: 18px; }
+        li { margin: 6px 0; }
+        .muted { color: #6b7280; }
+    </style>
+    </head>
+<body>
+    <div class="container">
+        <h2>Payment Received!</h2>
+        <p>Dear {{instructorName}},</p>
+        <p>You have received a payment for your course <strong>{{courseTitle}}</strong>.</p>
+
+        <h3>Payment Details:</h3>
+        <ul>
+            <li><strong>Order Code:</strong> {{orderCode}}</li>
+            <li><strong>Student:</strong> {{studentName}}</li>
+            <li><strong>Course:</strong> {{courseTitle}}</li>
+            <li><strong>Amount:</strong> {{amount}} {{currency}}</li>
+            <li><strong>Payment Date:</strong> {{paymentDate}}</li>
+        </ul>
+
+        <p>Congratulations on your new enrollment!</p>
+        <p class="muted">Wishing you and your students a great learning experience.</p>
+
+        <p>Best regards,<br/>EdTech Team</p>
+    </div>
+</body>
+</html>
+
+

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Failed</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #222; }
+        .container { max-width: 640px; margin: 0 auto; padding: 16px; }
+        h2 { color: #dc2626; }
+        ul { padding-left: 18px; }
+        li { margin: 6px 0; }
+        .muted { color: #6b7280; }
+    </style>
+    </head>
+<body>
+    <div class="container">
+        <h2>Payment Failed</h2>
+        <p>Dear {{studentName}},</p>
+        <p>Unfortunately, your payment for the course <strong>{{courseTitle}}</strong> could not be processed.</p>
+
+        <h3>Transaction Details:</h3>
+        <ul>
+            <li><strong>Order Code:</strong> {{orderCode}}</li>
+            <li><strong>Course:</strong> {{courseTitle}}</li>
+            <li><strong>Amount:</strong> {{amount}} {{currency}}</li>
+            <li><strong>Status:</strong> {{status}}</li>
+        </ul>
+
+        <p>Please try again or contact support if you continue to experience issues.</p>
+        <p>You can retry the payment using the same course enrollment link.</p>
+        <p class="muted">We’re here to help if you need assistance.</p>
+
+        <p>Best regards,<br/>EdTech Team</p>
+    </div>
+</body>
+</html>
+
+

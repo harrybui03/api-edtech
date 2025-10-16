@@ -46,4 +46,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     @Query("SELECT COUNT(t) FROM Transaction t WHERE t.student.id = :studentId AND t.course.id = :courseId AND t.status = 'PAID'")
     long countPaidTransactionsByStudentAndCourse(@Param("studentId") UUID studentId, @Param("courseId") UUID courseId);
+
+    @Query("SELECT COUNT(t) FROM Transaction t WHERE t.student.id = :studentId AND t.batch.id = :batchId AND t.status = 'PAID'")
+    long countPaidTransactionsByStudentAndBatch(@Param("studentId") UUID studentId, @Param("batchId") UUID batchId);
 }

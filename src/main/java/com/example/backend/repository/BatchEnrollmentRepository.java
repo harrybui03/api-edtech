@@ -8,4 +8,5 @@ import java.util.UUID;
 
 @Repository
 public interface BatchEnrollmentRepository extends JpaRepository<BatchEnrollment, UUID> {
+    boolean existsByUserIdAndBatchId(UUID userId, UUID batchId);
 }

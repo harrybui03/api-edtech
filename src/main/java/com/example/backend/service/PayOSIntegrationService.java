@@ -43,8 +43,11 @@ public class PayOSIntegrationService {
                     config.getChecksumKey()
             );
 
+            String itemName = transaction.getCourse() != null
+                    ? transaction.getCourse().getTitle()
+                    : (transaction.getBatch() != null ? transaction.getBatch().getTitle() : "Item");
             ItemData item = ItemData.builder()
-                    .name(transaction.getCourse().getTitle())
+                    .name(itemName)
                     .quantity(1)
                     .price(transaction.getAmount().intValue())
                     .build();
@@ -71,6 +74,7 @@ public class PayOSIntegrationService {
             PayOSPaymentResponse.Data data = new PayOSPaymentResponse.Data();
             data.setPaymentId(sdkRes.getPaymentLinkId());
             data.setPaymentUrl(sdkRes.getCheckoutUrl());
+            data.setQrCode(sdkRes.getQrCode());
             res.setData(data);
             return res;
 
@@ -141,12 +145,15 @@ public class PayOSIntegrationService {
         public static class Data {
             private String paymentId;
             private String paymentUrl;
+            private String qrCode;
 
             public String getPaymentId() { return paymentId; }
             public void setPaymentId(String paymentId) { this.paymentId = paymentId; }
 
             public String getPaymentUrl() { return paymentUrl; }
             public void setPaymentUrl(String paymentUrl) { this.paymentUrl = paymentUrl; }
+            public String getQrCode() { return qrCode; }
+            public void setQrCode(String qrCode) { this.qrCode = qrCode; }
         }
     }
 }
