@@ -3,8 +3,6 @@ package com.example.backend.mapper;
 import com.example.backend.dto.model.CourseDto;
 import com.example.backend.dto.model.CoursePublicDto;
 import com.example.backend.dto.model.ChapterDto;
-import com.example.backend.dto.model.LabelDto;
-import com.example.backend.dto.model.TagDto;
 import com.example.backend.dto.model.InstructorDto;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.entity.Chapter;
@@ -20,6 +18,9 @@ import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static com.example.backend.mapper.LabelMapper.toLabelDtoList;
+import static com.example.backend.mapper.TagMapper.toTagDtoList;
 
 @Component
 @RequiredArgsConstructor
@@ -111,24 +112,6 @@ public class CourseMapper {
         }
         
         return dto;
-    }
-
-    private List<TagDto> toTagDtoList(List<Tag> tags) {
-        if (tags == null || tags.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return tags.stream()
-                .map(tag -> new TagDto(tag.getId(), tag.getName()))
-                .collect(Collectors.toList());
-    }
-
-    private List<LabelDto> toLabelDtoList(List<Label> labels) {
-        if (labels == null || labels.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return labels.stream()
-                .map(label -> new LabelDto(label.getId(), label.getName()))
-                .collect(Collectors.toList());
     }
 
     public static Course toEntity(CourseRequest request) {
