@@ -25,7 +25,8 @@ CREATE TABLE transactions (
     order_code BIGINT UNIQUE NOT NULL DEFAULT nextval('order_code_seq'),
     student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     instructor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+    batch_id UUID REFERENCES batch(id) ON DELETE CASCADE,
     payment_id VARCHAR(255),
     payment_url TEXT,
     account_number VARCHAR(255),
@@ -44,6 +45,11 @@ CREATE TABLE transactions (
     
     -- Check constraint for status values
     CONSTRAINT check_transaction_status CHECK (status IN ('PENDING', 'PAID', 'FAILED', 'CANCELLED'))
+    ,
+    CONSTRAINT chk_transactions_course_or_batch CHECK (
+        (CASE WHEN course_id IS NOT NULL THEN 1 ELSE 0 END)
+      + (CASE WHEN batch_id IS NOT NULL THEN 1 ELSE 0 END) = 1
+    )
 );
 
 -- 3. ADD INDEXES for performance
@@ -54,6 +60,7 @@ CREATE INDEX idx_transactions_order_code ON transactions (order_code);
 CREATE INDEX idx_transactions_student ON transactions (student_id);
 CREATE INDEX idx_transactions_instructor ON transactions (instructor_id);
 CREATE INDEX idx_transactions_course ON transactions (course_id);
+CREATE INDEX idx_transactions_batch ON transactions (batch_id);
 CREATE INDEX idx_transactions_status ON transactions (status);
 CREATE INDEX idx_transactions_created_at ON transactions (created_at DESC);
 CREATE INDEX idx_transactions_payment_id ON transactions (payment_id) WHERE payment_id IS NOT NULL;
@@ -67,11 +74,12 @@ COMMENT ON COLUMN payos_configs.checksum_key IS 'PayOS checksum key for webhook 
 COMMENT ON COLUMN payos_configs.account_number IS 'PayOS account number for receiving payments';
 COMMENT ON COLUMN payos_configs.is_active IS 'Whether this config is currently active';
 
-COMMENT ON TABLE transactions IS 'Payment transactions for course enrollments';
+COMMENT ON TABLE transactions IS 'Payment transactions for course or batch enrollments';
 COMMENT ON COLUMN transactions.order_code IS 'Auto-incrementing numeric order code for the transaction';
 COMMENT ON COLUMN transactions.student_id IS 'Reference to the student user';
 COMMENT ON COLUMN transactions.instructor_id IS 'Reference to the instructor user';
-COMMENT ON COLUMN transactions.course_id IS 'Reference to the course being purchased';
+COMMENT ON COLUMN transactions.course_id IS 'Reference to the course being purchased (nullable)';
+COMMENT ON COLUMN transactions.batch_id IS 'Reference to the batch being purchased (nullable)';
 COMMENT ON COLUMN transactions.payment_id IS 'PayOS payment ID';
 COMMENT ON COLUMN transactions.payment_url IS 'PayOS payment URL for student to complete payment';
 COMMENT ON COLUMN transactions.account_number IS 'PayOS account number used for this transaction';

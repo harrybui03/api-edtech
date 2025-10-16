@@ -5,13 +5,18 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
+import org.springframework.util.StreamUtils;
 
 @Service
 @AllArgsConstructor
@@ -65,107 +70,67 @@ public class EmailService {
     }
 
     private String buildPaymentSuccessEmailContent(Transaction transaction) {
-        return String.format("""
-            <html>
-            <body>
-                <h2>Payment Successful!</h2>
-                <p>Dear %s,</p>
-                <p>Your payment for the course <strong>%s</strong> has been processed successfully.</p>
-                
-                <h3>Payment Details:</h3>
-                <ul>
-                    <li><strong>Order Code:</strong> %s</li>
-                    <li><strong>Course:</strong> %s</li>
-                    <li><strong>Amount:</strong> %s %s</li>
-                    <li><strong>Payment Date:</strong> %s</li>
-                </ul>
-                
-                <p>You can now access your course content and start learning!</p>
-                <p>Thank you for choosing our platform.</p>
-                
-                <p>Best regards,<br>EdTech Team</p>
-            </body>
-            </html>
-            """,
-            transaction.getStudent().getFullName(),
-            transaction.getCourse().getTitle(),
-            transaction.getOrderCode(),
-            transaction.getCourse().getTitle(),
-            formatCurrency(transaction.getAmount()),
-            transaction.getCurrency(),
-            transaction.getPaidAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-        );
+        Map<String, String> variables = new HashMap<>();
+        String title = transaction.getCourse() != null ? transaction.getCourse().getTitle() :
+                (transaction.getBatch() != null ? transaction.getBatch().getTitle() : "");
+        variables.put("studentName", transaction.getStudent().getFullName());
+        variables.put("courseTitle", title);
+        variables.put("orderCode", String.valueOf(transaction.getOrderCode()));
+        variables.put("amount", formatCurrency(transaction.getAmount()));
+        variables.put("currency", transaction.getCurrency());
+        variables.put("paymentDate", transaction.getPaidAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        return renderTemplate("static/email/payment-success.html", variables);
     }
 
     private String buildPaymentReceivedEmailContent(Transaction transaction) {
-        return String.format("""
-            <html>
-            <body>
-                <h2>Payment Received!</h2>
-                <p>Dear %s,</p>
-                <p>You have received a payment for your course <strong>%s</strong>.</p>
-                
-                <h3>Payment Details:</h3>
-                <ul>
-                    <li><strong>Order Code:</strong> %s</li>
-                    <li><strong>Student:</strong> %s</li>
-                    <li><strong>Course:</strong> %s</li>
-                    <li><strong>Amount:</strong> %s %s</li>
-                    <li><strong>Payment Date:</strong> %s</li>
-                </ul>
-                
-                <p>Congratulations on your new enrollment!</p>
-                
-                <p>Best regards,<br>EdTech Team</p>
-            </body>
-            </html>
-            """,
-            transaction.getInstructor().getFullName(),
-            transaction.getCourse().getTitle(),
-            transaction.getOrderCode(),
-            transaction.getStudent().getFullName(),
-            transaction.getCourse().getTitle(),
-            formatCurrency(transaction.getAmount()),
-            transaction.getCurrency(),
-            transaction.getPaidAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-        );
+        Map<String, String> variables = new HashMap<>();
+        String title = transaction.getCourse() != null ? transaction.getCourse().getTitle() :
+                (transaction.getBatch() != null ? transaction.getBatch().getTitle() : "");
+        variables.put("instructorName", transaction.getInstructor().getFullName());
+        variables.put("courseTitle", title);
+        variables.put("orderCode", String.valueOf(transaction.getOrderCode()));
+        variables.put("studentName", transaction.getStudent().getFullName());
+        variables.put("amount", formatCurrency(transaction.getAmount()));
+        variables.put("currency", transaction.getCurrency());
+        variables.put("paymentDate", transaction.getPaidAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        return renderTemplate("static/email/payment-received.html", variables);
     }
 
     private String buildPaymentFailureEmailContent(Transaction transaction) {
-        return String.format("""
-            <html>
-            <body>
-                <h2>Payment Failed</h2>
-                <p>Dear %s,</p>
-                <p>Unfortunately, your payment for the course <strong>%s</strong> could not be processed.</p>
-                
-                <h3>Transaction Details:</h3>
-                <ul>
-                    <li><strong>Order Code:</strong> %s</li>
-                    <li><strong>Course:</strong> %s</li>
-                    <li><strong>Amount:</strong> %s %s</li>
-                    <li><strong>Status:</strong> %s</li>
-                </ul>
-                
-                <p>Please try again or contact support if you continue to experience issues.</p>
-                <p>You can retry the payment using the same course enrollment link.</p>
-                
-                <p>Best regards,<br>EdTech Team</p>
-            </body>
-            </html>
-            """,
-            transaction.getStudent().getFullName(),
-            transaction.getCourse().getTitle(),
-            transaction.getOrderCode(),
-            transaction.getCourse().getTitle(),
-            formatCurrency(transaction.getAmount()),
-            transaction.getCurrency(),
-            transaction.getStatus()
-        );
+        Map<String, String> variables = new HashMap<>();
+        String title = transaction.getCourse() != null ? transaction.getCourse().getTitle() :
+                (transaction.getBatch() != null ? transaction.getBatch().getTitle() : "");
+        variables.put("studentName", transaction.getStudent().getFullName());
+        variables.put("courseTitle", title);
+        variables.put("orderCode", String.valueOf(transaction.getOrderCode()));
+        variables.put("amount", formatCurrency(transaction.getAmount()));
+        variables.put("currency", transaction.getCurrency());
+        variables.put("status", String.valueOf(transaction.getStatus()));
+        return renderTemplate("static/email/payment-failure.html", variables);
     }
 
     private String formatCurrency(BigDecimal amount) {
         return String.format("%,.0f", amount);
+    }
+
+    private String renderTemplate(String classpathLocation, Map<String, String> variables) {
+        try {
+            ClassPathResource resource = new ClassPathResource(classpathLocation);
+            String template = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+            String rendered = template;
+            for (Map.Entry<String, String> entry : variables.entrySet()) {
+                String placeholder = "{{" + entry.getKey() + "}}";
+                rendered = rendered.replace(placeholder, safeString(entry.getValue()));
+            }
+            return rendered;
+        } catch (Exception ex) {
+            log.error("Failed to render email template {}: {}", classpathLocation, ex.getMessage(), ex);
+            return "";
+        }
+    }
+
+    private String safeString(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
 }

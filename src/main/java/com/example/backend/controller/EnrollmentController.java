@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping
@@ -23,34 +22,47 @@ public class EnrollmentController {
     private final EnrollmentService enrollmentService;
     private final PaymentService paymentService;
     
-    @PostMapping("/courses/{courseId}/enroll-free")
-    @Operation(summary = "Enroll in a free course", description = "Student enrolls in a free course without payment")
-    public ResponseEntity<EnrollmentResponse> enrollInFreeCourse(@PathVariable UUID courseId) {
-        if (enrollmentService.isPaidCourse(courseId)) {
+    @PostMapping("/courses/{courseSlug}/enroll-free")
+    @Operation(summary = "Enroll in a free course", description = "Student enrolls in a free course without payment (by slug)")
+    public ResponseEntity<EnrollmentResponse> enrollInFreeCourse(@PathVariable String courseSlug) {
+        if (enrollmentService.isPaidCourseBySlug(courseSlug)) {
             throw new RuntimeException("This course requires payment. Please use the paid enrollment endpoint.");
         }
-        
-        EnrollmentResponse response = enrollmentService.enrollInCourse(courseId);
+
+        EnrollmentResponse response = enrollmentService.enrollInCourseBySlug(courseSlug);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     
-    @PostMapping("/courses/{courseId}/enroll-paid")
-    @Operation(summary = "Enroll in a paid course", description = "Student enrolls in a paid course and creates payment request")
-    public ResponseEntity<PaymentResponse> enrollInPaidCourse(@PathVariable UUID courseId) {
-        
-        if (!enrollmentService.isPaidCourse(courseId)) {
+    @PostMapping("/courses/{courseSlug}/enroll-paid")
+    @Operation(summary = "Enroll in a paiFd course", description = "Student enrolls in a paid course and creates payment request (by slug)")
+    public ResponseEntity<PaymentResponse> enrollInPaidCourse(@PathVariable String courseSlug) {
+        if (!enrollmentService.isPaidCourseBySlug(courseSlug)) {
             throw new RuntimeException("This course is free. Please use the free enrollment endpoint.");
         }
-        
-        PaymentResponse response = paymentService.createPayment(courseId);
+
+        PaymentResponse response = paymentService.createPaymentBySlug(courseSlug);
         return ResponseEntity.status(HttpStatus.OK).body(response);
     }
     
-    @PostMapping("/courses/slug/{courseSlug}/enroll")
-    @Operation(summary = "Enroll in a course by slug", description = "Student enrolls in a specific course using course slug (SEO)")
-    public ResponseEntity<EnrollmentResponse> enrollInCourseBySlug(@PathVariable String courseSlug) {
-        EnrollmentResponse response = enrollmentService.enrollInCourseBySlug(courseSlug);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    
+    @PostMapping("/batches/{batchSlug}/enroll-free")
+    @Operation(summary = "Enroll in a free batch", description = "Student enrolls in a free batch/cohort using slug")
+    public ResponseEntity<Void> enrollInFreeBatchBySlug(@PathVariable String batchSlug) {
+        if (enrollmentService.isPaidBatchBySlug(batchSlug)) {
+            throw new RuntimeException("This batch requires payment. Please use the paid enrollment endpoint.");
+        }
+        enrollmentService.enrollInBatchBySlug(batchSlug);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @PostMapping("/batches/{batchSlug}/enroll-paid")
+    @Operation(summary = "Enroll in a paid batch", description = "Student enrolls in a paid batch/cohort using slug and creates payment request")
+    public ResponseEntity<PaymentResponse> enrollInPaidBatchBySlug(@PathVariable String batchSlug) {
+        if (!enrollmentService.isPaidBatchBySlug(batchSlug)) {
+            throw new RuntimeException("This batch is free. Please use the free enrollment endpoint.");
+        }
+        PaymentResponse response = paymentService.createBatchPaymentBySlug(batchSlug);
+        return ResponseEntity.status(HttpStatus.OK).body(response);
     }
     
     @GetMapping("/enrollments/my-courses")

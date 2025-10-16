@@ -4,6 +4,7 @@ import com.example.backend.dto.response.payment.PaymentResponse;
 import com.example.backend.dto.response.payment.TransactionListResponse;
 import com.example.backend.entity.*;
 import com.example.backend.repository.CourseRepository;
+import com.example.backend.repository.BatchRepository;
 import com.example.backend.repository.PayOSConfigRepository;
 import com.example.backend.repository.TransactionRepository;
 import com.example.backend.repository.UserRepository;
@@ -27,6 +28,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.example.backend.entity.Batch;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -40,19 +43,21 @@ public class PaymentService {
     private final EnrollmentService enrollmentService;
     private final EmailService emailService;
     private final ObjectMapper objectMapper;
+    private final BatchRepository batchRepository;
 
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
 
+
     @Transactional
-    public PaymentResponse createPayment(UUID courseId) {
+    public PaymentResponse createPaymentBySlug(String courseSlug) {
         // Get current user
         User student = getCurrentUser();
-        log.info("Creating payment for student: {} and course: {}", student.getId(), courseId);
+        log.info("Creating payment for student: {} and course slug: {}", student.getId(), courseSlug);
 
         // Validate course exists and is paid
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new DataNotFoundException("Course not found with id: " + courseId));
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new DataNotFoundException("Course not found with slug: " + courseSlug));
 
         if (!Boolean.TRUE.equals(course.getPaidCourse())) {
             throw new InvalidRequestDataException("Course is not a paid course");
@@ -66,10 +71,10 @@ public class PaymentService {
         User instructor = course.getInstructors().stream()
                 .findFirst()
                 .map(CourseInstructor::getUser)
-                .orElseThrow(() -> new DataNotFoundException("No instructor found for course: " + courseId));
+                .orElseThrow(() -> new DataNotFoundException("No instructor found for course slug: " + courseSlug));
 
-        // Check if student already enrolled
-        if (transactionRepository.countPaidTransactionsByStudentAndCourse(student.getId(), courseId) > 0) {
+        // Check if student already enrolled (paid)
+        if (transactionRepository.countPaidTransactionsByStudentAndCourse(student.getId(), course.getId()) > 0) {
             throw new InvalidRequestDataException("Student is already enrolled in this course");
         }
 
@@ -81,7 +86,7 @@ public class PaymentService {
         Long generatedOrderCode = transactionRepository.nextOrderCode();
         String returnUrlPrefix = baseUrl + "/payment/success?orderCode=";
         String cancelUrlPrefix = baseUrl + "/payment/cancel?orderCode=";
-            
+
         Transaction transaction = Transaction.builder()
                 .orderCode(generatedOrderCode)
                 .student(student)
@@ -96,35 +101,116 @@ public class PaymentService {
                 .build();
 
         transaction = transactionRepository.save(transaction);
-        // Reload to get DB-generated orderCode (BIGINT default from sequence)
         transaction = transactionRepository.findById(transaction.getId())
                 .orElseThrow(() -> new DataNotFoundException("Transaction not found after save"));
 
-        // Update URLs with the orderCode
         String orderCode = String.valueOf(transaction.getOrderCode());
         transaction.setReturnUrl(returnUrlPrefix + orderCode);
         transaction.setCancelUrl(cancelUrlPrefix + orderCode);
         transaction = transactionRepository.save(transaction);
 
-        // Create PayOS payment request
         try {
             PayOSIntegrationService.PayOSPaymentResponse payOSResponse = payOSIntegrationService.createPaymentRequest(payOSConfig, transaction);
-            
-            // Check PayOS response
+
             if (payOSResponse.getData() != null) {
-                // Update transaction with PayOS response data
                 transaction.setPaymentId(payOSResponse.getData().getPaymentId());
                 transaction.setPaymentUrl(payOSResponse.getData().getPaymentUrl());
                 transaction = transactionRepository.save(transaction);
                 log.info("Payment created successfully for order: {} with PayOS data", orderCode);
             } else {
-                // PayOS response has no data, but payment request was created
-                log.warn("PayOS response has no data for order: {}, code: {}, message: {}", 
+                log.warn("PayOS response has no data for order: {}, code: {}, message: {}",
                         orderCode, payOSResponse.getCode(), payOSResponse.getMessage());
             }
 
-            return mapToResponse(transaction);
+            PaymentResponse response = mapToResponse(transaction);
+            if (payOSResponse.getData() != null) {
+                response.setQrCode(payOSResponse.getData().getQrCode());
+            }
+            return response;
+        } catch (Exception e) {
+            log.error("Error creating PayOS payment request: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to create payment request: " + e.getMessage());
+        }
+    }
 
+    @Transactional
+    public PaymentResponse createBatchPaymentBySlug(String batchSlug) {
+        // Validate batch
+        Batch batch = batchRepository.findBySlug(batchSlug)
+                .orElseThrow(() -> new DataNotFoundException("Batch not found with slug: " + batchSlug));
+
+        if (!batch.isPaidBatch()) {
+            throw new InvalidRequestDataException("Batch is not a paid batch");
+        }
+
+        // Get current user
+        User student = getCurrentUser();
+
+        // Prevent duplicate paid enrollment
+        if (transactionRepository.countPaidTransactionsByStudentAndBatch(student.getId(), batch.getId()) > 0) {
+            throw new InvalidRequestDataException("Student is already enrolled in this batch");
+        }
+
+        // Validate price
+        if (batch.getSellingPrice() == null || batch.getSellingPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidRequestDataException("Batch price is not set or invalid");
+        }
+
+        // Get any instructor of batch (mirror course logic)
+        User instructor = batch.getInstructors().stream()
+                .findFirst()
+                .map(BatchInstructor::getInstructor)
+                .orElseThrow(() -> new DataNotFoundException("No instructor found for batch slug: " + batchSlug));
+
+        // Get instructor's PayOS config
+        PayOSConfig payOSConfig = payOSConfigRepository.findByInstructorId(instructor.getId())
+                .orElseThrow(() -> new DataNotFoundException("No PayOS configuration found for instructor: " + instructor.getId()));
+
+        // Pre-generate order code
+        Long generatedOrderCode = transactionRepository.nextOrderCode();
+        String returnUrlPrefix = baseUrl + "/payment/success?orderCode=";
+        String cancelUrlPrefix = baseUrl + "/payment/cancel?orderCode=";
+
+        Transaction transaction = Transaction.builder()
+                .orderCode(generatedOrderCode)
+                .student(student)
+                .instructor(instructor)
+                .batch(batch)
+                .amount(batch.getSellingPrice())
+                .currency("VND")
+                .status(Transaction.TransactionStatus.PENDING)
+                .description("Payment for batch: " + batch.getTitle())
+                .accountNumber(payOSConfig.getAccountNumber())
+                .webhookReceived(false)
+                .build();
+
+        transaction = transactionRepository.save(transaction);
+        transaction = transactionRepository.findById(transaction.getId())
+                .orElseThrow(() -> new DataNotFoundException("Transaction not found after save"));
+
+        String orderCode = String.valueOf(transaction.getOrderCode());
+        transaction.setReturnUrl(returnUrlPrefix + orderCode);
+        transaction.setCancelUrl(cancelUrlPrefix + orderCode);
+        transaction = transactionRepository.save(transaction);
+
+        try {
+            PayOSIntegrationService.PayOSPaymentResponse payOSResponse = payOSIntegrationService.createPaymentRequest(payOSConfig, transaction);
+
+            if (payOSResponse.getData() != null) {
+                transaction.setPaymentId(payOSResponse.getData().getPaymentId());
+                transaction.setPaymentUrl(payOSResponse.getData().getPaymentUrl());
+                transaction = transactionRepository.save(transaction);
+                log.info("Batch payment created successfully for order: {} with PayOS data", orderCode);
+            } else {
+                log.warn("PayOS response has no data for order: {}, code: {}, message: {}",
+                        orderCode, payOSResponse.getCode(), payOSResponse.getMessage());
+            }
+
+            PaymentResponse response = mapToResponse(transaction);
+            if (payOSResponse.getData() != null) {
+                response.setQrCode(payOSResponse.getData().getQrCode());
+            }
+            return response;
         } catch (Exception e) {
             log.error("Error creating PayOS payment request: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to create payment request: " + e.getMessage());
@@ -168,7 +254,12 @@ public class PaymentService {
             if ("00".equals(sdkCode)) {
                 transaction.setStatus(Transaction.TransactionStatus.PAID);
                 transaction.setPaidAt(OffsetDateTime.now());
-                enrollmentService.createEnrollment(transaction.getStudent().getId(), transaction.getCourse().getId());
+                if (transaction.getCourse() != null) {
+                    enrollmentService.createEnrollment(transaction.getStudent().getId(), transaction.getCourse().getId());
+                } else if (transaction.getBatch() != null) {
+                    // Batch enrollment after payment success
+                    enrollmentService.enrollInBatchBySlug(transaction.getBatch().getSlug());
+                }
                 sendPaymentSuccessNotifications(transaction);
             } else {
                 transaction.setStatus(Transaction.TransactionStatus.FAILED);
@@ -237,10 +328,13 @@ public class PaymentService {
                 .studentName(transaction.getStudent().getFullName())
                 .instructorId(transaction.getInstructor().getId())
                 .instructorName(transaction.getInstructor().getFullName())
-                .courseId(transaction.getCourse().getId())
-                .courseTitle(transaction.getCourse().getTitle())
+                .courseId(transaction.getCourse() != null ? transaction.getCourse().getId() : null)
+                .courseTitle(transaction.getCourse() != null ? transaction.getCourse().getTitle() : null)
+                .batchId(transaction.getBatch() != null ? transaction.getBatch().getId() : null)
+                .batchTitle(transaction.getBatch() != null ? transaction.getBatch().getTitle() : null)
                 .paymentId(transaction.getPaymentId())
                 .paymentUrl(transaction.getPaymentUrl())
+                .qrCode(null)
                 .accountNumber(transaction.getAccountNumber())
                 .amount(transaction.getAmount())
                 .currency(transaction.getCurrency())
@@ -257,12 +351,15 @@ public class PaymentService {
     }
 
     private TransactionListResponse.TransactionSummaryResponse mapToSummaryResponse(Transaction transaction) {
+        String title = transaction.getCourse() != null
+                ? transaction.getCourse().getTitle()
+                : (transaction.getBatch() != null ? transaction.getBatch().getTitle() : null);
         return TransactionListResponse.TransactionSummaryResponse.builder()
                 .id(transaction.getId().toString())
                 .orderCode(String.valueOf(transaction.getOrderCode()))
                 .studentName(transaction.getStudent().getFullName())
                 .instructorName(transaction.getInstructor().getFullName())
-                .courseTitle(transaction.getCourse().getTitle())
+                .courseTitle(title)
                 .amount(transaction.getAmount().toString())
                 .currency(transaction.getCurrency())
                 .status(transaction.getStatus().toString())

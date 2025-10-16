@@ -24,8 +24,11 @@ public class PaymentResponse {
     private String instructorName;
     private UUID courseId;
     private String courseTitle;
+    private UUID batchId;
+    private String batchTitle;
     private String paymentId;
     private String paymentUrl;
+    private String qrCode;
     private String accountNumber;
     private BigDecimal amount;
     private String currency;
