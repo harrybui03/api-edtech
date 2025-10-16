@@ -87,6 +87,13 @@ public class LessonService {
         return lessonMapper.toDto(updatedLesson);
     }
 
+    @Transactional(readOnly = true)
+    public LessonDto getLessonByIdForInstructor(UUID lessonId) {
+        Lesson lesson = findLessonById(lessonId);
+        checkCourseOwnership(lesson.getCourse());
+        return lessonMapper.toDto(lesson);
+    }
+
     @Transactional
     public void deleteLesson(UUID lessonId) {
         Lesson lessonToDelete = findLessonById(lessonId);
