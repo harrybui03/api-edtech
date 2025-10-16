@@ -79,6 +79,10 @@ public class LessonService {
         }
 
         lessonMapper.updateEntityFromRequest(request, lesson);
+        if (request.getQuizId() != null) {
+            lesson.setQuiz(quizRepository.findById(request.getQuizId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + request.getQuizId())));
+        }
         Lesson updatedLesson = lessonRepository.save(lesson);
         return lessonMapper.toDto(updatedLesson);
     }
