@@ -45,8 +45,8 @@ public class Lesson {
     @Column(name = "position")
     private Integer position;
 
-    @ManyToOne
-    @JoinColumn(name = "quiz_id")
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "quiz_id" , referencedColumnName = "id")
     private Quiz quiz;
 
     @CreationTimestamp

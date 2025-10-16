@@ -1,10 +1,14 @@
 package com.example.backend.controller;
 
+import com.example.backend.constant.BatchStatus;
 import com.example.backend.constant.CourseStatus;
+import com.example.backend.dto.model.BatchDto;
 import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.model.CourseDto;
 import com.example.backend.dto.model.LessonDto;
 import com.example.backend.dto.model.QuizDto;
+import com.example.backend.dto.request.batch.CreateBatchRequest;
+import com.example.backend.dto.request.batch.UpdateBatchRequest;
 import com.example.backend.dto.request.course.ChapterRequest;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.dto.request.course.LessonRequest;
@@ -15,11 +19,7 @@ import com.example.backend.dto.request.quiz.QuizQuestionsRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
-import com.example.backend.service.ChapterService;
-import com.example.backend.service.CourseService;
-import com.example.backend.service.LessonService;
-import com.example.backend.service.EnrollmentService;
-import com.example.backend.service.QuizService;
+import com.example.backend.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,8 +27,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,6 +40,7 @@ public class InstructorController {
     private final LessonService lessonService;
     private final EnrollmentService enrollmentService;
     private final QuizService quizService;
+    private final BatchService batchService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -184,4 +183,60 @@ public class InstructorController {
         List<QuizSubmissionResponse> submissions = quizService.getCourseQuizSubmissions(courseId);
         return ResponseEntity.ok(submissions);
     }
+
+    // Batch Management APIs
+    @PostMapping("/batches")
+    @Operation(summary = "Create a new batch", description = "Instructor creates a new batch")
+    public ResponseEntity<BatchDto> createBatch(@RequestBody CreateBatchRequest request) {
+        return new ResponseEntity<>(batchService.createBatch(request), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/batches/{batchId}")
+    @Operation(summary = "Update batch", description = "Instructor updates an existing batch")
+    public ResponseEntity<BatchDto> updateBatch(@PathVariable UUID batchId, @RequestBody UpdateBatchRequest request) {
+        return ResponseEntity.ok(batchService.updateBatch(batchId, request));
+    }
+
+    @DeleteMapping("/batches/{batchId}")
+    @Operation(summary = "Delete batch", description = "Instructor deletes a batch")
+    public ResponseEntity<Void> deleteBatch(@PathVariable UUID batchId) {
+        batchService.deleteBatch(batchId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/my-batches")
+    @Operation(summary = "Get my batches", description = "Instructor gets a paginated list of their batches, optionally filtered by status")
+    public ResponseEntity<PaginationResponse<BatchDto>> getMyBatches(Pageable pageable, @RequestParam(required = false) BatchStatus status) {
+        Page<BatchDto> batches = batchService.getMyBatches(pageable, status);
+        return ResponseEntity.ok(new PaginationResponse<>(batches));
+    }
+
+    @GetMapping("/batches/{batchId}")
+    @Operation(summary = "Get batch by ID for instructor", description = "Instructor gets their batch details.")
+    public ResponseEntity<BatchDto> getBatchById(@PathVariable UUID batchId) {
+        return ResponseEntity.ok(batchService.getBatchById(batchId));
+    }
+
+    @PutMapping("/batches/{batchId}/publish")
+    @Operation(summary = "Publish a batch", description = "Instructor publishes a batch, making it visible to the public.")
+    public ResponseEntity<Void> publishBatch(@PathVariable UUID batchId) {
+        batchService.publishBatch(batchId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/batches/{batchId}/instructors")
+    @Operation(summary = "Add instructor to batch", description = "Instructor adds another instructor to a batch")
+    public ResponseEntity<Void> addInstructorToBatch(@PathVariable UUID batchId, @RequestBody InstructorIdRequest request) {
+        batchService.addInstructorToBatch(batchId, request.getInstructorId());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @DeleteMapping("/batches/{batchId}/instructors/{instructorId}")
+    @Operation(summary = "Remove instructor from batch", description = "Instructor removes another instructor from a batch")
+    public ResponseEntity<Void> removeInstructorFromBatch(@PathVariable UUID batchId, @PathVariable UUID instructorId) {
+        batchService.removeInstructorFromBatch(batchId, instructorId);
+        return ResponseEntity.noContent().build();
+    }
+    
+    
 }

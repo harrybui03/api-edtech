@@ -1,9 +1,6 @@
 package com.example.backend.controller;
 
-import com.example.backend.dto.model.ChapterPublicDto;
-import com.example.backend.dto.model.CoursePublicDto;
-import com.example.backend.dto.model.LessonPublicDto;
-import com.example.backend.dto.model.UserDTO;
+import com.example.backend.dto.model.*;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.review.ReviewResponse;
 import com.example.backend.service.*;
@@ -25,6 +22,7 @@ public class PublicController {
     private final ReviewService reviewService;
     private final LessonService lessonService;
     private final UserService userService;
+    private final BatchService batchService;
 
     @GetMapping("/courses")
     public ResponseEntity<PaginationResponse<CoursePublicDto>> getPublishedCourses(
@@ -62,5 +60,20 @@ public class PublicController {
     @GetMapping("/users/{userId}")
     public ResponseEntity<UserDTO> getUserById(@PathVariable UUID userId) {
         return ResponseEntity.ok(userService.getUserById(userId));
+    }
+
+    @GetMapping("/batches")
+    public ResponseEntity<PaginationResponse<BatchDto>> getPublishedBatches(
+            Pageable pageable,
+            @RequestParam(required = false) List<String> tags,
+            @RequestParam(required = false) List<String> labels,
+            @RequestParam(required = false) String search) {
+        Page<BatchDto> batches = batchService.getPublishedBatches(pageable, tags, labels, search);
+        return ResponseEntity.ok(new PaginationResponse<>(batches));
+    }
+
+    @GetMapping("/batches/{slug}")
+    public ResponseEntity<BatchDto> getBatchDetails(@PathVariable String slug) {
+        return ResponseEntity.ok(batchService.getBatchBySlug(slug));
     }
 }
