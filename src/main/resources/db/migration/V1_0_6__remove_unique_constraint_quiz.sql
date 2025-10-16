@@ -1,0 +1,1 @@
+ALTER TABLE quizzes DROP CONSTRAINT quizzes_title_key;

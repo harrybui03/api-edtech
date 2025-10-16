@@ -121,6 +121,12 @@ public class InstructorController {
         return ResponseEntity.ok(lessonService.updateLesson(lessonId, request));
     }
 
+    @GetMapping("/lessons/{lessonId}")
+    @Operation(summary = "Get lesson by ID for instructor", description = "Instructor gets their lesson details.")
+    public ResponseEntity<LessonDto> getLessonByIdForInstructor(@PathVariable UUID lessonId) {
+        return ResponseEntity.ok(lessonService.getLessonByIdForInstructor(lessonId));
+    }
+
     @DeleteMapping("/lessons/{lessonId}")
     public ResponseEntity<Void> deleteLesson(@PathVariable UUID lessonId) {
         lessonService.deleteLesson(lessonId);
