@@ -7,6 +7,7 @@ import com.example.backend.dto.model.ChapterDto;
 import com.example.backend.dto.model.CourseDto;
 import com.example.backend.dto.model.LessonDto;
 import com.example.backend.dto.model.QuizDto;
+import com.example.backend.dto.model.QuizQuestionDto;
 import com.example.backend.dto.request.batch.CreateBatchRequest;
 import com.example.backend.dto.request.batch.UpdateBatchRequest;
 import com.example.backend.dto.request.course.ChapterRequest;
@@ -167,6 +168,13 @@ public class InstructorController {
     public ResponseEntity<Void> deleteQuiz(@PathVariable UUID quizId) {
         quizService.deleteQuiz(quizId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/quizzes/{quizId}/questions")
+    @Operation(summary = "Get all questions for a quiz", description = "Instructor retrieves all questions for a specific quiz.")
+    public ResponseEntity<List<QuizQuestionDto>> getQuestionsByQuizId(@PathVariable UUID quizId) {
+        List<QuizQuestionDto> questions = quizService.getQuestionsByQuizId(quizId);
+        return ResponseEntity.ok(questions);
     }
 
     @PostMapping("/quizzes/{quizId}/questions")
