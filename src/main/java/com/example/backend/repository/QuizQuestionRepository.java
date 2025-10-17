@@ -8,6 +8,8 @@ import java.util.UUID;
 
 public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, UUID> {
     
+    List<QuizQuestion> findByQuizId(UUID quizId);
+
     List<QuizQuestion> findByQuizIdOrderByCreation(UUID quizId);
     
     void deleteByQuizId(UUID quizId);

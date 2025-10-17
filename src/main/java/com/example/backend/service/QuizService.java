@@ -1,6 +1,7 @@
 package com.example.backend.service;
 
 import com.example.backend.dto.model.QuizDto;
+import com.example.backend.dto.model.QuizQuestionDto;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizSubmissionRequest;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -125,6 +127,17 @@ public class QuizService {
         int userAttempts = quizSubmissionRepository.countByQuizIdAndMemberId(quizId, user.getId());
 
         return QuizMapper.toResponse(quiz, questions, userAttempts);
+    }
+
+    @Transactional(readOnly = true)
+    public List<QuizQuestionDto> getQuestionsByQuizId(UUID quizId) {
+        Quiz quiz = quizRepository.findById(quizId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + quizId));
+
+        List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderByCreation(quizId);
+        return questions.stream()
+                .map(QuizQuestionMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -264,5 +277,17 @@ public class QuizService {
         return userRepository.findByEmail(email)
                 .map(User::getId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    private void checkCourseOwnership(Course course) {
+        User currentUser = userRepository.findByEmail(getCurrentUserEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        boolean isOwner = course.getInstructors().stream()
+                .anyMatch(instructor -> instructor.getUser().getId().equals(currentUser.getId()));
+
+        if (!isOwner) {
+            throw new ForbiddenException("You are not an instructor for this course and cannot modify its content.");
+        }
     }
 }
