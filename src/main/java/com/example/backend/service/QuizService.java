@@ -96,6 +96,23 @@ public class QuizService {
     }
 
     @Transactional
+    public void deleteQuestion(UUID questionId) {
+        QuizQuestion question = quizQuestionRepository.findById(questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
+
+        Quiz quiz = question.getQuiz();
+
+        // Recalculate total marks before deleting
+        int marksOfDeletedQuestion = question.getMarks();
+        quiz.setTotalMarks(quiz.getTotalMarks() - marksOfDeletedQuestion);
+        quiz.setModifiedBy(getCurrentUserId(getCurrentUserEmail()));
+
+        quizQuestionRepository.delete(question);
+        quizRepository.save(quiz);
+    }
+
+
+    @Transactional
     public void updateQuestion(UUID questionId, QuizQuestionRequest request) {
         QuizQuestion question = quizQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
