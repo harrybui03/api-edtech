@@ -197,6 +197,13 @@ public class InstructorController {
         return ResponseEntity.status(HttpStatus.CREATED).body(quiz);
     }
 
+    @DeleteMapping("/questions/{questionId}")
+    @Operation(summary = "Delete question", description = "Instructor deletes a quiz question")
+    public ResponseEntity<Void> deleteQuestion(@PathVariable UUID questionId) {
+        quizService.deleteQuestion(questionId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/questions/{questionId}")
     @Operation(summary = "Update question", description = "Instructor updates a quiz question")
     public ResponseEntity<Void> updateQuestion(@PathVariable UUID questionId, @RequestBody QuizQuestionRequest request) {
