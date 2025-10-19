@@ -22,7 +22,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -75,8 +74,8 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public CoursePublicDto getCourseBySlugPublic(String slug) {
-        Course course = courseRepository.findBySlug(slug)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with slug: " + slug));
+        Course course = courseRepository.findBySlugAndStatusPublished(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Published course not found with slug: " + slug));
         List<Tag> tags = tagRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
         List<Label> labels = labelRepository.findByEntityIdAndEntityType(course.getId(), EntityType.COURSE);
         return courseMapper.toPublicDto(course, tags, labels);
