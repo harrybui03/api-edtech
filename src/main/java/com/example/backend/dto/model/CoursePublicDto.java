@@ -24,6 +24,7 @@ public class CoursePublicDto {
     private String targetAudience;
     private String skillLevel;
     private String learnerProfileDesc;
+    private Boolean paidCourse;
     private List<TagDto> tags;
     private List<LabelDto> labels;
     private List<InstructorDto> instructors;

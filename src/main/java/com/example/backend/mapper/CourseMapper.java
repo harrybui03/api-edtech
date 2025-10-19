@@ -98,6 +98,7 @@ public class CourseMapper {
         dto.setTargetAudience(course.getTargetAudience());
         dto.setSkillLevel(course.getSkillLevel());
         dto.setLearnerProfileDesc(course.getLearnerProfileDesc());
+        dto.setPaidCourse(course.getPaidCourse());
         
         // Map instructors
         if (course.getInstructors() != null) {

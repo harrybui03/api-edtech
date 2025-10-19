@@ -21,5 +21,8 @@ public interface CourseRepository extends JpaRepository<Course, UUID>, JpaSpecif
 
     Optional<Course> findBySlug(String slug);
 
+    @Query("SELECT c FROM Course c WHERE c.slug = :slug AND c.status = 'PUBLISHED'")
+    Optional<Course> findBySlugAndStatusPublished(@Param("slug") String slug);
+
     boolean existsBySlug(String slug);
 }
