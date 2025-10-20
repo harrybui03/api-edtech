@@ -117,6 +117,8 @@ public class FileUploadService {
                     String.format("lessons/%s/resources/%s-%s", entityID, currentTimestamp, sanitizedFileName);
             case LESSON_VIDEO ->
                     String.format("lessons/%s/videos/%s-%s" , entityID , currentTimestamp , sanitizedFileName);
+            case BATCH_DISCUSSION ->
+                    String.format("batch-discussions/%s/%s", entityID , currentTimestamp);
         };
     }
 }

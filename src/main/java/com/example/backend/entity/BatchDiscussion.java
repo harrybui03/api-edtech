@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -37,4 +39,7 @@ public class BatchDiscussion {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "batchDiscussion", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<BatchDocument> documents = new HashSet<>();
 }

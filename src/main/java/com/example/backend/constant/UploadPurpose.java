@@ -4,5 +4,6 @@ public enum UploadPurpose {
     USER_AVATAR,
     COURSE_THUMBNAIL,
     LESSON_RESOURCE,
-    LESSON_VIDEO
+    LESSON_VIDEO,
+    BATCH_DISCUSSION
 }
