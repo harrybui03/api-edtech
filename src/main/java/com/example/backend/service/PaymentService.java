@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -48,6 +49,29 @@ public class PaymentService {
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
 
+    private final Random random = new Random();
+
+    /**
+     * Generates a unique random order code between 1000 and 10000000
+     * @return unique order code
+     */
+    private Long generateUniqueOrderCode() {
+        Long orderCode;
+        int maxAttempts = 100; // Prevent infinite loop
+        int attempts = 0;
+        
+        do {
+            // Generate random number between 1000 and 10000000
+            orderCode = (long) (1000 + random.nextInt(10000000 - 1000 + 1));
+            attempts++;
+            
+            if (attempts >= maxAttempts) {
+                throw new RuntimeException("Unable to generate unique order code after " + maxAttempts + " attempts");
+            }
+        } while (transactionRepository.findByOrderCode(orderCode).isPresent());
+        
+        return orderCode;
+    }
 
     @Transactional
     public PaymentResponse createPaymentBySlug(String courseSlug) {
@@ -82,8 +106,8 @@ public class PaymentService {
         PayOSConfig payOSConfig = payOSConfigRepository.findByInstructorId(instructor.getId())
                 .orElseThrow(() -> new DataNotFoundException("No PayOS configuration found for instructor: " + instructor.getId()));
 
-        // Pre-generate numeric order code from DB sequence to avoid nulls
-        Long generatedOrderCode = transactionRepository.nextOrderCode();
+        // Generate unique random order code between 1000 and 10000000
+        Long generatedOrderCode = generateUniqueOrderCode();
         String returnUrlPrefix = baseUrl + "/payment/success?orderCode=";
         String cancelUrlPrefix = baseUrl + "/payment/cancel?orderCode=";
 
@@ -166,8 +190,8 @@ public class PaymentService {
         PayOSConfig payOSConfig = payOSConfigRepository.findByInstructorId(instructor.getId())
                 .orElseThrow(() -> new DataNotFoundException("No PayOS configuration found for instructor: " + instructor.getId()));
 
-        // Pre-generate order code
-        Long generatedOrderCode = transactionRepository.nextOrderCode();
+        // Generate unique random order code between 1000 and 10000000
+        Long generatedOrderCode = generateUniqueOrderCode();
         String returnUrlPrefix = baseUrl + "/payment/success?orderCode=";
         String cancelUrlPrefix = baseUrl + "/payment/cancel?orderCode=";
 
