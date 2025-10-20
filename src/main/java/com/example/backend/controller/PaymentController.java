@@ -32,8 +32,13 @@ public class PaymentController {
     public ResponseEntity<String> handlePayOSWebhook(
             @RequestBody String rawBody,
             @RequestHeader(value = "x-payos-signature", required = false) String signature) {
-        paymentService.handlePayOSWebhook(rawBody, signature);
-        return ResponseEntity.ok("Webhook processed successfully");
+		try {
+			paymentService.handlePayOSWebhook(rawBody, signature);
+			return ResponseEntity.ok("Webhook processed successfully");
+		} catch (Exception e) {
+			// Always acknowledge webhook with 200, even if internal processing fails
+			return ResponseEntity.ok("Webhook received");
+		}
     }
 
     @GetMapping("/transactions")
