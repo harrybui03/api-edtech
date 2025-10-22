@@ -46,6 +46,7 @@ public class CourseMapper {
 
         dto.setVideoLink(course.getVideoLink());
         dto.setStatus(course.getStatus());
+        dto.setPaidCourse(course.getPaidCourse());
         dto.setCoursePrice(course.getCoursePrice());
         dto.setSellingPrice(course.getSellingPrice());
         dto.setCurrency(course.getCurrency());

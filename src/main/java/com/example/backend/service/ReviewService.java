@@ -136,6 +136,13 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true)
+    public Double getAverageRatingForCourseSlug(String courseSlug) {
+        Course course = courseRepository.findBySlug(courseSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with slug: " + courseSlug));
+        return reviewRepository.findAverageRatingByCourseId(course.getId());
+    }
+
+    @Transactional(readOnly = true)
     public long getReviewCountForCourse(UUID courseId) {
         return reviewRepository.countByCourseId(courseId);
     }

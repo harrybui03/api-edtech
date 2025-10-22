@@ -18,6 +18,7 @@ public class CourseDto {
     private String image;
     private String videoLink;
     private CourseStatus status;
+    private Boolean paidCourse;
     private BigDecimal coursePrice;
     private BigDecimal sellingPrice;
     private String currency;

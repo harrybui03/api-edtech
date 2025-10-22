@@ -52,6 +52,12 @@ public class PublicController {
         return ResponseEntity.ok(new PaginationResponse<>(reviews));
     }
 
+    @GetMapping("/courses/{courseSlug}/average-rating")
+    public ResponseEntity<Double> getAverageRating(@PathVariable String courseSlug) {
+        Double avg = reviewService.getAverageRatingForCourseSlug(courseSlug);
+        return ResponseEntity.ok(avg != null ? avg : 0.0);
+    }
+
     @GetMapping("/lessons/{lessonSlug}")
     public ResponseEntity<LessonPublicDto> getLessonPublic(@PathVariable String lessonSlug) {
         return ResponseEntity.ok(lessonService.getLessonBySlugPublic(lessonSlug));
