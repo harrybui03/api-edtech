@@ -55,10 +55,54 @@ public class ProgressMapper {
                 .overallProgress(enrollment.getProgress())
                 .completedLessons(completedLessons)
                 .totalLessons(totalLessons)
-                .currentLessonId(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getId() : null)
-                .currentLessonTitle(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getTitle() : null)
-                .currentLessonSlug(enrollment.getCurrentLesson() != null ? enrollment.getCurrentLesson().getSlug() : null)
+                .currentLessonId(resolveCurrentLessonId(enrollment, chapters, lessonsByChapter))
+                .currentLessonTitle(resolveCurrentLessonTitle(enrollment, chapters, lessonsByChapter))
+                .currentLessonSlug(resolveCurrentLessonSlug(enrollment, chapters, lessonsByChapter))
                 .chapters(chapterResponses)
                 .build();
+    }
+
+    private UUID resolveCurrentLessonId(Enrollment enrollment, List<Chapter> chapters, Map<UUID, List<Lesson>> lessonsByChapter) {
+        Lesson current = enrollment.getCurrentLesson();
+        if (current != null) return current.getId();
+        Lesson fallback = getFirstOrLastLesson(chapters, lessonsByChapter, enrollment);
+        return fallback != null ? fallback.getId() : null;
+    }
+
+    private String resolveCurrentLessonTitle(Enrollment enrollment, List<Chapter> chapters, Map<UUID, List<Lesson>> lessonsByChapter) {
+        Lesson current = enrollment.getCurrentLesson();
+        if (current != null) return current.getTitle();
+        Lesson fallback = getFirstOrLastLesson(chapters, lessonsByChapter, enrollment);
+        return fallback != null ? fallback.getTitle() : null;
+    }
+
+    private String resolveCurrentLessonSlug(Enrollment enrollment, List<Chapter> chapters, Map<UUID, List<Lesson>> lessonsByChapter) {
+        Lesson current = enrollment.getCurrentLesson();
+        if (current != null) return current.getSlug();
+        Lesson fallback = getFirstOrLastLesson(chapters, lessonsByChapter, enrollment);
+        return fallback != null ? fallback.getSlug() : null;
+    }
+
+    // If enrollment has no current lesson: return first lesson if progress is zero (start),
+    // or last lesson if progress is 100% (completed). Otherwise null.
+    private Lesson getFirstOrLastLesson(List<Chapter> chapters, Map<UUID, List<Lesson>> lessonsByChapter, Enrollment enrollment) {
+        if (chapters == null || chapters.isEmpty()) return null;
+        boolean isAtStart = enrollment.getProgress() == null || enrollment.getProgress().signum() == 0;
+        boolean isCompleted = enrollment.getProgress() != null && enrollment.getProgress().compareTo(java.math.BigDecimal.valueOf(100)) >= 0;
+
+        if (isAtStart) {
+            for (Chapter chapter : chapters) {
+                List<Lesson> lessons = lessonsByChapter.getOrDefault(chapter.getId(), List.of());
+                if (!lessons.isEmpty()) return lessons.get(0);
+            }
+        }
+        if (isCompleted) {
+            for (int i = chapters.size() - 1; i >= 0; i--) {
+                Chapter chapter = chapters.get(i);
+                List<Lesson> lessons = lessonsByChapter.getOrDefault(chapter.getId(), List.of());
+                if (!lessons.isEmpty()) return lessons.get(lessons.size() - 1);
+            }
+        }
+        return null;
     }
 }
