@@ -4,6 +4,7 @@ import com.example.backend.constant.BatchStatus;
 import com.example.backend.constant.CourseStatus;
 import com.example.backend.dto.model.BatchDto;
 import com.example.backend.dto.model.ChapterDto;
+import com.example.backend.dto.model.JobDto;
 import com.example.backend.dto.model.CourseDto;
 import com.example.backend.dto.model.LessonDto;
 import com.example.backend.dto.model.QuizDto;
@@ -35,10 +36,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.UUID;
@@ -55,6 +53,7 @@ public class InstructorController {
     private final QuizService quizService;
     private final BatchService batchService;
     private final PayOSConfigService payOSConfigService;
+    private final JobService jobService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -287,5 +286,12 @@ public class InstructorController {
     public ResponseEntity<PayOSConfigResponse> getMyPayOSConfig() {
         PayOSConfigResponse response = payOSConfigService.getMyPayOSConfig();
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/my-jobs")
+    @Operation(summary = "Get my jobs", description = "Instructor gets a paginated list of their created jobs (e.g., video transcoding).")
+    public ResponseEntity<PaginationResponse<JobDto>> getMyJobs(Pageable pageable) {
+        Page<JobDto> jobs = jobService.getMyJobs(pageable);
+        return ResponseEntity.ok(new PaginationResponse<>(jobs));
     }
 }

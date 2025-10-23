@@ -8,8 +8,11 @@ import com.example.backend.dto.message.TranscodingRequestMessage;
 import com.example.backend.dto.request.upload.TranscodeRequest;
 import com.example.backend.dto.response.upload.PresignedUrlResponse;
 import com.example.backend.entity.Job;
+import com.example.backend.entity.User;
 import com.example.backend.excecption.InternalServerError;
+import com.example.backend.excecption.ResourceNotFoundException;
 import com.example.backend.repository.JobRepository;
+import com.example.backend.repository.UserRepository;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -18,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,6 +36,7 @@ public class FileUploadService {
     private final JobRepository jobRepository;
     private final RabbitTemplate rabbitTemplate;
     private final MinioClient minioClient;
+    private final UserRepository userRepository;
 
     @Value("${minio.bucket.name}")
     private String bucketName;
@@ -81,6 +86,7 @@ public class FileUploadService {
                 .entityId(transcodeRequest.getEntityId())
                 .entityType(transcodeRequest.getPurpose())
                 .status(JobStatus.PENDING)
+                .user(getCurrentUser())
                 .jobType(JobType.VIDEO_TRANSCODING)
                 .build();
 
@@ -120,5 +126,11 @@ public class FileUploadService {
             case BATCH_DISCUSSION ->
                     String.format("batch-discussions/%s/%s", entityID , currentTimestamp);
         };
+    }
+
+    private User getCurrentUser() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User with email " + email + " not found."));
     }
 }
