@@ -150,5 +150,8 @@ public class CourseMapper {
         course.setCurrency(request.getCurrency());
         course.setAmountUsd(request.getAmountUsd());
         course.setLanguage(request.getLanguage());
+        course.setTargetAudience(request.getTargetAudience());
+        course.setSkillLevel(request.getSkillLevel());
+        course.setLearnerProfileDesc(request.getLearnerProfileDesc());
     }
 }
