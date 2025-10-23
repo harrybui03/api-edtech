@@ -8,25 +8,25 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "jobs")
-@Data
+@Getter
+@Setter
 @Builder
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 public class Job {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "entity_id" , nullable = false)
+    @Column(name = "entity_id", nullable = false)
     private UUID entityId;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "entity_type", nullable = false)
     private UploadPurpose entityType;
 
@@ -37,6 +37,10 @@ public class Job {
     @Enumerated(EnumType.STRING)
     @Column(name = "job_type", nullable = false, columnDefinition = "job_type_enum")
     private JobType jobType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
