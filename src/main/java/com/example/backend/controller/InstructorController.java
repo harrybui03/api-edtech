@@ -19,6 +19,7 @@ import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionsRequest;
 import com.example.backend.dto.request.payos.CreatePayOSConfigRequest;
+import com.example.backend.dto.request.payos.UpdatePayOSConfigRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.payos.PayOSConfigResponse;
@@ -293,5 +294,12 @@ public class InstructorController {
     public ResponseEntity<PaginationResponse<JobDto>> getMyJobs(Pageable pageable) {
         Page<JobDto> jobs = jobService.getMyJobs(pageable);
         return ResponseEntity.ok(new PaginationResponse<>(jobs));
+    }
+
+    @PutMapping("/payos-configs/{configId}")
+    @Operation(summary = "Update PayOS configuration", description = "Update an existing PayOS configuration for the current instructor")
+    public ResponseEntity<PayOSConfigResponse> updatePayOSConfig(@PathVariable UUID configId, @RequestBody UpdatePayOSConfigRequest request) {
+        PayOSConfigResponse response = payOSConfigService.updatePayOSConfig(configId, request);
+        return ResponseEntity.ok(response);
     }
 }

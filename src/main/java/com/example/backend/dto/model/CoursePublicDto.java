@@ -20,6 +20,7 @@ public class CoursePublicDto {
     private Integer enrollments;
     private Integer lessons;
     private Double rating;
+    private String videoLink;
     private String language;
     private String targetAudience;
     private String skillLevel;

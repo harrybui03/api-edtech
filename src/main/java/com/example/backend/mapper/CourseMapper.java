@@ -100,6 +100,7 @@ public class CourseMapper {
         dto.setSkillLevel(course.getSkillLevel());
         dto.setLearnerProfileDesc(course.getLearnerProfileDesc());
         dto.setPaidCourse(course.getPaidCourse());
+        dto.setVideoLink(course.getVideoLink());
         
         // Map instructors
         if (course.getInstructors() != null) {
