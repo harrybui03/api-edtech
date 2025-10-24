@@ -1,10 +1,12 @@
 package com.example.backend.service;
 
 import com.example.backend.dto.request.payos.CreatePayOSConfigRequest;
+import com.example.backend.dto.request.payos.UpdatePayOSConfigRequest;
 import com.example.backend.dto.response.payos.PayOSConfigResponse;
 import com.example.backend.entity.PayOSConfig;
 import com.example.backend.entity.User;
 import com.example.backend.excecption.DataNotFoundException;
+import com.example.backend.excecption.ForbiddenException;
 import com.example.backend.excecption.InvalidRequestDataException;
 import com.example.backend.repository.PayOSConfigRepository;
 import com.example.backend.repository.UserRepository;
@@ -73,6 +75,39 @@ public class PayOSConfigService {
         return getPayOSConfigByInstructorId(currentUser.getId());
     }
     
+    @Transactional
+    public PayOSConfigResponse updatePayOSConfig(UUID configId, UpdatePayOSConfigRequest request) {
+        User currentUser = getCurrentUser();
+
+        PayOSConfig config = payOSConfigRepository.findById(configId)
+                .orElseThrow(() -> new ResourceNotFoundException("PayOS configuration not found with id: " + configId));
+
+        // Verify ownership
+        if (!config.getInstructor().getId().equals(currentUser.getId())) {
+            throw new ForbiddenException("You are not authorized to update this PayOS configuration.");
+        }
+
+        // Update fields if provided
+        if (request.getClientId() != null) {
+            config.setClientId(request.getClientId());
+        }
+        if (request.getApiKey() != null) {
+            config.setApiKey(request.getApiKey());
+        }
+        if (request.getChecksumKey() != null) {
+            config.setChecksumKey(request.getChecksumKey());
+        }
+        if (request.getAccountNumber() != null) {
+            config.setAccountNumber(request.getAccountNumber());
+        }
+        if (request.getIsActive() != null) {
+            config.setIsActive(request.getIsActive());
+        }
+
+        PayOSConfig updatedConfig = payOSConfigRepository.save(config);
+
+        return mapToResponse(updatedConfig);
+    }
 
     private PayOSConfigResponse mapToResponse(PayOSConfig config) {
         return PayOSConfigResponse.builder()
