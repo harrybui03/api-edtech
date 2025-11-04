@@ -5,13 +5,10 @@ import com.example.backend.constant.EnrollmentMemberType;
 import com.example.backend.constant.EnrollmentRole;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.entity.*;
+import com.example.backend.excecption.InvalidRequestDataException;
+import com.example.backend.excecption.ResourceNotFoundException;
 import com.example.backend.mapper.EnrollmentMapper;
-import com.example.backend.repository.CourseRepository;
-import com.example.backend.repository.BatchRepository;
-import com.example.backend.repository.BatchEnrollmentRepository;
-import com.example.backend.repository.EnrollmentRepository;
-import com.example.backend.repository.LessonRepository;
-import com.example.backend.repository.UserRepository;
+import com.example.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,8 +33,9 @@ public class EnrollmentService {
     private final EnrollmentMapper enrollmentMapper;
     private final BatchRepository batchRepository;
     private final BatchEnrollmentRepository batchEnrollmentRepository;
-    
+    private final LiveSessionRepository liveSessionRepository;
 
+    // ... (other methods remain the same)
     public EnrollmentResponse enrollInCourseBySlug(String courseSlug) {
         String studentEmail = getCurrentUserEmail();
         log.info("Enrolling student {} in course slug {}", studentEmail, courseSlug);
@@ -63,10 +61,8 @@ public class EnrollmentService {
         enrollment.setRole(EnrollmentRole.MEMBER);
         enrollment.setProgress(BigDecimal.ZERO);
 
-        // Set current lesson to the first lesson of the course
         List<Lesson> lessons = lessonRepository.findByCourseId(course.getId());
         if (!lessons.isEmpty()) {
-            // Sort lessons by chapter position and lesson position
             lessons.sort((l1, l2) -> {
                 int chapterComparison = l1.getChapter().getPosition().compareTo(l2.getChapter().getPosition());
                 if (chapterComparison != 0) return chapterComparison;
@@ -95,7 +91,6 @@ public class EnrollmentService {
         Batch batch = batchRepository.findBySlug(batchSlug)
                 .orElseThrow(() -> new RuntimeException("Batch not found"));
 
-        // Prevent duplicates via repository method
         boolean alreadyEnrolled = batchEnrollmentRepository.existsByUserIdAndBatchId(student.getId(), batch.getId());
         if (alreadyEnrolled) {
             throw new RuntimeException("Student is already enrolled in this batch");
@@ -141,7 +136,6 @@ public class EnrollmentService {
         User instructor = userRepository.findByEmail(instructorEmail)
                 .orElseThrow(() -> new RuntimeException("Instructor not found"));
         
-        // Verify instructor has access to this course
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
         
@@ -169,7 +163,6 @@ public class EnrollmentService {
         Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
                 .orElseThrow(() -> new RuntimeException("Enrollment not found"));
         
-        // Verify instructor has access to this course
         Course course = enrollment.getCourse();
         boolean isInstructor = course.getInstructors().stream()
                 .anyMatch(ci -> ci.getUser().getId().equals(instructor.getId()));
@@ -180,7 +173,6 @@ public class EnrollmentService {
         
         enrollmentRepository.delete(enrollment);
         
-        // Update course enrollment count
         course.setEnrollments((course.getEnrollments() != null ? course.getEnrollments() : 1) - 1);
         courseRepository.save(course);
         
@@ -190,6 +182,37 @@ public class EnrollmentService {
     @Transactional(readOnly = true)
     public boolean isEnrolled(UUID studentId, UUID courseId) {
         return enrollmentRepository.existsByMemberIdAndCourseId(studentId, courseId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isUserAuthorizedForSession(String email, UUID sessionId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+
+        LiveSession liveSession = liveSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("LiveSession not found with ID: " + sessionId));
+
+        Batch batch = liveSession.getBatch();
+        if (batch == null) {
+            throw new InvalidRequestDataException("LiveSession with ID: " + sessionId + " is not associated with any batch.");
+        }
+        UUID batchId = batch.getId();
+
+        // Check 1: Is the user an enrolled student in the batch?
+        boolean isEnrolledStudent = batchEnrollmentRepository.existsByUserIdAndBatchId(user.getId(), batchId);
+        if (isEnrolledStudent) {
+            return true;
+        }
+
+        // Check 2: Is the user an instructor for the batch?
+        boolean isInstructor = batch.getInstructors().stream()
+                .anyMatch(batchInstructor -> batchInstructor.getInstructor().getId().equals(user.getId()));
+
+        if (isInstructor) {
+            return true;
+        }
+
+        return false;
     }
     
     @Transactional(readOnly = true)
@@ -209,13 +232,11 @@ public class EnrollmentService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
         
-        // Check if already enrolled
         if (enrollmentRepository.existsByMemberIdAndCourseId(studentId, courseId)) {
             log.warn("Student {} is already enrolled in course {}", studentId, courseId);
             return;
         }
         
-        // Create new enrollment
         Enrollment enrollment = new Enrollment();
         enrollment.setMember(student);
         enrollment.setCourse(course);
@@ -225,7 +246,6 @@ public class EnrollmentService {
         
         enrollmentRepository.save(enrollment);
         
-        // Update course enrollment count
         course.setEnrollments((course.getEnrollments() != null ? course.getEnrollments() : 0) + 1);
         courseRepository.save(course);
         
