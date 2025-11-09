@@ -33,9 +33,8 @@ public class UserService {
     }
 
     @Transactional
-    public void updateUser(UserDTO userDTO) {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        User user = userRepository.findByEmail(email)
+    public void updateUser(UserDTO userDTO , UUID id) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() -> new DataNotFoundException("Current user not found in database"));
 
         user.setFullName(userDTO.getFullName());

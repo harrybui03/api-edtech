@@ -2,8 +2,8 @@ package com.example.backend.service;
 
 import com.example.backend.config.RabbitMQConfig;
 import com.example.backend.constant.UploadPurpose;
-import com.example.backend.constant.job.JobStatus;
-import com.example.backend.constant.job.JobType;
+import com.example.backend.constant.JobStatus;
+import com.example.backend.constant.JobType;
 import com.example.backend.dto.message.TranscodingRequestMessage;
 import com.example.backend.dto.request.upload.TranscodeRequest;
 import com.example.backend.dto.response.upload.PresignedUrlResponse;
