@@ -36,8 +36,7 @@ public class AdminController {
 
     @PutMapping("/users/{userId}")
     public ResponseEntity<Void> updateUser(@PathVariable UUID userId, @RequestBody UserDTO userDTO) {
-        userDTO.setId(userId);
-        userService.updateUser(userDTO);
+        userService.updateUser(userDTO , userId);
         return ResponseEntity.ok().build();
     }
 
