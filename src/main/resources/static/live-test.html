@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Streaming Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .video-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .video-box {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .video-box video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .video-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .controls {
+            margin-top: 10px;
+        }
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        .btn-group-sm .btn {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <h1 class="mb-4">🎥 Live Streaming Test</h1>
+        
+        <!-- Login Section -->
+        <div class="section" id="login-section">
+            <h3>🔐 Authentication</h3>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">Access Token:</label>
+                    <input type="text" id="accessToken" class="form-control" placeholder="Paste your access token">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Refresh Token (optional):</label>
+                    <input type="text" id="refreshToken" class="form-control" placeholder="Paste your refresh token">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button onclick="saveTokens()" class="btn btn-primary w-100">Save Tokens</button>
+                </div>
+            </div>
+            <div class="mt-2">
+                <small class="text-muted">Status: <span id="auth-status" class="badge bg-secondary">Not authenticated</span></small>
+            </div>
+        </div>
+
+        <!-- Instructor Controls -->
+        <div class="section">
+            <h3>👨‍🏫 Instructor Controls</h3>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Batch ID:</label>
+                    <input type="text" id="batchId" class="form-control" placeholder="Enter batch UUID">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Title:</label>
+                    <input type="text" id="liveTitle" class="form-control" value="Live Session Test">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Description:</label>
+                    <input type="text" id="liveDescription" class="form-control" value="Testing live streaming">
+                </div>
+            </div>
+            <div class="controls">
+                <button onclick="startLive()" class="btn btn-success">Start Live</button>
+                <button onclick="endLive()" class="btn btn-danger">End Live</button>
+            </div>
+            <div class="mt-2">
+                <small>Room ID: <strong id="roomId">-</strong></small>
+            </div>
+        </div>
+
+        <!-- Join & Publish Section -->
+        <div class="section">
+            <h3>📹 Room Controls</h3>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">Room ID:</label>
+                    <input type="text" id="joinRoomId" class="form-control" placeholder="Enter room ID">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Your Name (optional):</label>
+                    <input type="text" id="displayName" class="form-control" placeholder="Enter your name">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button onclick="joinRoom()" class="btn btn-primary w-100">Join Room</button>
+                </div>
+            </div>
+            <div class="controls">
+                <button onclick="publishCamera()" class="btn btn-success">Publish Camera</button>
+                <button onclick="publishScreen()" class="btn btn-info">Publish Screen</button>
+                <button onclick="toggleMic()" id="micBtn" class="btn btn-secondary">🎤 Mute Mic</button>
+                <button onclick="unpublishCamera()" class="btn btn-warning">Stop Camera</button>
+                <button onclick="unpublishScreen()" class="btn btn-warning">Stop Screen</button>
+            </div>
+            <div class="mt-2">
+                <small>Session ID: <strong id="publisherSessionId">-</strong></small> | 
+                <small>Handle ID: <strong id="publisherHandleId">-</strong></small> | 
+                <small>Mic: <span id="micStatus" class="badge bg-success">ON</span></small>
+            </div>
+        </div>
+
+        <!-- Watch Others -->
+        <div class="section">
+            <h3>👀 Watch Others</h3>
+            <div class="controls">
+                <button onclick="listParticipants()" class="btn btn-primary">List Participants</button>
+                <button onclick="subscribeToAll()" class="btn btn-success">Subscribe to All</button>
+            </div>
+            <div id="participantsList" class="mt-3"></div>
+        </div>
+
+        <!-- Video Display -->
+        <div class="section">
+            <h3>📺 Video Streams</h3>
+            <div class="video-container" id="videoContainer">
+                <!-- Videos will be added here dynamically -->
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="section">
+            <h3>📋 Logs</h3>
+            <div class="log-container" id="logContainer"></div>
+            <button onclick="clearLogs()" class="btn btn-sm btn-secondary mt-2">Clear Logs</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let accessToken = '';
+        let refreshToken = '';
+        
+        // State management
+        let state = {
+            roomId: null,
+            publisherSessionId: null,
+            publisherHandleId: null,
+            subscriberSessionId: null,
+            subscriberHandleId: null,
+            cameraPc: null,
+            screenPc: null,
+            screenSessionId: null,
+            screenHandleId: null,
+            subscriberPcs: {},
+            publishers: [],
+            keepaliveTimers: {},
+            micMuted: false,
+            localStream: null
+        };
+
+        // ===== Authentication =====
+        function saveTokens() {
+            accessToken = document.getElementById('accessToken').value.trim();
+            refreshToken = document.getElementById('refreshToken').value.trim();
+            
+            if (accessToken) {
+                document.getElementById('auth-status').textContent = 'Authenticated';
+                document.getElementById('auth-status').className = 'badge bg-success';
+                log('✅ Tokens saved successfully');
+            } else {
+                document.getElementById('auth-status').textContent = 'Not authenticated';
+                document.getElementById('auth-status').className = 'badge bg-danger';
+                log('❌ Please enter access token');
+            }
+        }
+
+        function getHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            };
+        }
+
+        // ===== Logging =====
+        function log(message) {
+            const logContainer = document.getElementById('logContainer');
+            const time = new Date().toLocaleTimeString();
+            logContainer.innerHTML += `[${time}] ${message}\n`;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = '';
+        }
+
+        // ===== Video Management =====
+        function addVideoElement(streamId, stream, label) {
+            const container = document.getElementById('videoContainer');
+            
+            // Remove existing video if any
+            const existing = document.getElementById(streamId);
+            if (existing) {
+                existing.remove();
+            }
+            
+            const videoBox = document.createElement('div');
+            videoBox.className = 'video-box';
+            videoBox.id = streamId;
+            
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.playsinline = true;
+            video.muted = label.includes('Local'); // Mute local videos
+            video.srcObject = stream;
+            
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'video-label';
+            labelDiv.textContent = label;
+            
+            videoBox.appendChild(video);
+            videoBox.appendChild(labelDiv);
+            container.appendChild(videoBox);
+            
+            log(`📹 Added video: ${label}`);
+        }
+
+        function removeVideoElement(streamId) {
+            const element = document.getElementById(streamId);
+            if (element) {
+                element.remove();
+                log(`🗑️ Removed video: ${streamId}`);
+            }
+        }
+
+        // ===== Start Live (Instructor) =====
+        async function startLive() {
+            const batchId = document.getElementById('batchId').value.trim();
+            const title = document.getElementById('liveTitle').value.trim();
+            const description = document.getElementById('liveDescription').value.trim();
+            
+            if (!batchId) {
+                alert('Please enter batch ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/live/start`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ batchId, title, description })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    state.roomId = data.roomId;
+                    document.getElementById('roomId').textContent = data.roomId;
+                    document.getElementById('joinRoomId').value = data.roomId;
+                    log(`✅ Live started! Room ID: ${data.roomId}`);
+                } else {
+                    log(`❌ Start live failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== End Live =====
+        async function endLive() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/live/end/${roomId}`, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ Live ended successfully`);
+                } else {
+                    log(`❌ End live failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== Join Room =====
+        async function joinRoom() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            const displayName = document.getElementById('displayName').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                const requestBody = { 
+                    roomId: parseInt(roomId), 
+                    ptype: 'publisher'  // Always join as publisher
+                };
+                
+                // Add display name if provided
+                if (displayName) {
+                    requestBody.displayName = displayName;
+                }
+                
+                const response = await fetch(`${API_BASE}/live/join`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Save session and handle
+                    state.publisherSessionId = data.sessionId;
+                    state.publisherHandleId = data.handleId;
+                    
+                    document.getElementById('publisherSessionId').textContent = state.publisherSessionId || 'N/A';
+                    document.getElementById('publisherHandleId').textContent = state.publisherHandleId || 'N/A';
+                    
+                    if (state.publisherSessionId && state.publisherHandleId) {
+                        const name = displayName || 'default';
+                        log(`✅ Joined room (${name}). Session: ${state.publisherSessionId}, Handle: ${state.publisherHandleId}`);
+                        log(`💡 You can now publish your camera/screen or just subscribe to others`);
+                    } else {
+                        log(`⚠️ Joined but failed to extract session/handle from response:`);
+                        log(`📥 Response: ${JSON.stringify(data)}`);
+                    }
+                } else {
+                    log(`❌ Join failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== Publish Camera =====
+        async function publishCamera() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                // Get camera stream
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                state.localStream = stream; // Save stream for mic control
+                addVideoElement('local-camera', stream, 'Local Camera');
+                
+                // Create peer connection with ICE servers
+                const pcConfig = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+                state.cameraPc = new RTCPeerConnection(pcConfig);
+                stream.getTracks().forEach(track => state.cameraPc.addTrack(track, stream));
+                
+                // Create offer
+                const offer = await state.cameraPc.createOffer();
+                await state.cameraPc.setLocalDescription(offer);
+                
+                // Wait for ICE gathering to complete
+                if (state.cameraPc.iceGatheringState !== 'complete') {
+                    log(`⏳ Waiting for ICE gathering... (current state: ${state.cameraPc.iceGatheringState})`);
+                    
+                    // Log ICE candidates as they come in
+                    state.cameraPc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            log(`🔍 ICE candidate: ${event.candidate.type} - ${event.candidate.address || event.candidate.candidate}`);
+                        } else {
+                            log('🔍 ICE gathering finished (null candidate)');
+                        }
+                    };
+                    
+                    await new Promise((resolve) => {
+                        const checkState = () => {
+                            if (state.cameraPc.iceGatheringState === 'complete') {
+                                log(`✅ ICE gathering complete (${state.cameraPc.iceGatheringState})`);
+                                resolve();
+                            }
+                        };
+                        state.cameraPc.addEventListener('icegatheringstatechange', checkState);
+                        // Timeout after 5 seconds
+                        setTimeout(() => {
+                            state.cameraPc.removeEventListener('icegatheringstatechange', checkState);
+                            log(`⚠️ ICE gathering timeout (state: ${state.cameraPc.iceGatheringState}), proceeding anyway`);
+                            resolve();
+                        }, 5000);
+                    });
+                } else {
+                    log('✅ ICE already complete');
+                }
+                
+                // Use updated SDP with ICE candidates
+                const finalOffer = state.cameraPc.localDescription;
+                
+                log('📤 Publishing camera stream...');
+                log(`SDP Offer (first 200 chars): ${finalOffer.sdp.substring(0, 200)}...`);
+                
+                // Send to backend (include sessionId/handleId from Join if available)
+                const publishPayload = { 
+                    roomId: parseInt(roomId), 
+                    sdp: finalOffer.sdp,  // Use final SDP with ICE candidates
+                    streamType: 'camera'
+                };
+                
+                // If we joined as publisher, include session/handle from Join
+                if (state.publisherSessionId && state.publisherHandleId) {
+                    publishPayload.sessionId = state.publisherSessionId;
+                    publishPayload.handleId = state.publisherHandleId;
+                    log(`✅ Using session from Join: ${state.publisherSessionId}, handle: ${state.publisherHandleId}`);
+                } else {
+                    log('⚠️ Using session from Start Live (instructor direct publish). If you joined as publisher, this is wrong!');
+                    log(`State check: publisherSessionId=${state.publisherSessionId}, publisherHandleId=${state.publisherHandleId}`);
+                }
+                
+                const response = await fetch(`${API_BASE}/live/publish`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(publishPayload)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.sdpAnswer) {
+                    await state.cameraPc.setRemoteDescription(new RTCSessionDescription({
+                        type: 'answer',
+                        sdp: data.sdpAnswer
+                    }));
+                    log('✅ Camera published successfully');
+                } else {
+                    log(`❌ Publish failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== Publish Screen =====
+        async function publishScreen() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                // Get screen stream
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                addVideoElement('local-screen', stream, 'Local Screen');
+                
+                // Handle when user stops sharing
+                stream.getVideoTracks()[0].onended = () => {
+                    log('⚠️ Screen sharing stopped by user');
+                    unpublishScreen();
+                };
+                
+                // Create peer connection with ICE servers
+                const pcConfig = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+                state.screenPc = new RTCPeerConnection(pcConfig);
+                stream.getTracks().forEach(track => state.screenPc.addTrack(track, stream));
+                
+                // Create offer
+                const offer = await state.screenPc.createOffer();
+                await state.screenPc.setLocalDescription(offer);
+                
+                // Wait for ICE gathering to complete
+                if (state.screenPc.iceGatheringState !== 'complete') {
+                    log(`⏳ Waiting for ICE gathering... (current state: ${state.screenPc.iceGatheringState})`);
+                    
+                    // Log ICE candidates as they come in
+                    state.screenPc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            log(`🔍 ICE candidate: ${event.candidate.type} - ${event.candidate.address || event.candidate.candidate}`);
+                        } else {
+                            log('🔍 ICE gathering finished (null candidate)');
+                        }
+                    };
+                    
+                    await new Promise((resolve) => {
+                        const checkState = () => {
+                            if (state.screenPc.iceGatheringState === 'complete') {
+                                log(`✅ ICE gathering complete (${state.screenPc.iceGatheringState})`);
+                                resolve();
+                            }
+                        };
+                        state.screenPc.addEventListener('icegatheringstatechange', checkState);
+                        // Timeout after 5 seconds
+                        setTimeout(() => {
+                            state.screenPc.removeEventListener('icegatheringstatechange', checkState);
+                            log(`⚠️ ICE gathering timeout (state: ${state.screenPc.iceGatheringState}), proceeding anyway`);
+                            resolve();
+                        }, 5000);
+                    });
+                } else {
+                    log('✅ ICE already complete');
+                }
+                
+                // Use updated SDP with ICE candidates
+                const finalOffer = state.screenPc.localDescription;
+                
+                log('📤 Publishing screen share...');
+                log(`SDP Offer (first 200 chars): ${finalOffer.sdp.substring(0, 200)}...`);
+                
+                // Send to backend
+                const response = await fetch(`${API_BASE}/live/publish-screen`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ roomId: parseInt(roomId), sdp: finalOffer.sdp })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.sdpAnswer) {
+                    state.screenSessionId = data.sessionId;
+                    state.screenHandleId = data.handleId;
+                    
+                    await state.screenPc.setRemoteDescription(new RTCSessionDescription({
+                        type: 'answer',
+                        sdp: data.sdpAnswer
+                    }));
+                    log(`✅ Screen published successfully. Session: ${state.screenSessionId}, Handle: ${state.screenHandleId}`);
+
+                    // Start keepalive for screen session
+                    startKeepalive('screen', state.screenSessionId);
+                } else {
+                    log(`❌ Publish screen failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== Unpublish Camera =====
+        async function unpublishCamera() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                if (state.cameraPc) {
+                    state.cameraPc.getSenders().forEach(sender => sender.track?.stop());
+                    state.cameraPc.close();
+                    state.cameraPc = null;
+                }
+                
+                // Stop local stream tracks
+                if (state.localStream) {
+                    state.localStream.getTracks().forEach(track => track.stop());
+                    state.localStream = null;
+                }
+                
+                // Reset mic state
+                state.micMuted = false;
+                document.getElementById('micBtn').textContent = '🎤 Mute Mic';
+                document.getElementById('micBtn').className = 'btn btn-secondary';
+                document.getElementById('micStatus').textContent = 'ON';
+                document.getElementById('micStatus').className = 'badge bg-success';
+                
+                removeVideoElement('local-camera');
+                
+                const response = await fetch(`${API_BASE}/live/unpublish/${roomId}`, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+                
+                if (response.ok) {
+                    log('✅ Camera unpublished');
+                } else {
+                    log('❌ Unpublish camera failed');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== Unpublish Screen =====
+        async function unpublishScreen() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId || !state.screenSessionId) {
+                return;
+            }
+            
+            try {
+                if (state.screenPc) {
+                    state.screenPc.getSenders().forEach(sender => sender.track?.stop());
+                    state.screenPc.close();
+                    state.screenPc = null;
+                }
+                
+                removeVideoElement('local-screen');
+                
+                const response = await fetch(`${API_BASE}/live/unpublish-screen`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({
+                        roomId: parseInt(roomId),
+                        screenSessionId: state.screenSessionId,
+                        screenHandleId: state.screenHandleId
+                    })
+                });
+                
+                if (response.ok) {
+                    log('✅ Screen unpublished');
+                    state.screenSessionId = null;
+                    state.screenHandleId = null;
+                } else {
+                    log('❌ Unpublish screen failed');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== Toggle Microphone =====
+        function toggleMic() {
+            if (!state.localStream) {
+                alert('Please publish camera first');
+                log('⚠️ No local stream available. Publish camera first.');
+                return;
+            }
+            
+            const audioTracks = state.localStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                alert('No audio track found');
+                log('⚠️ No audio track in local stream');
+                return;
+            }
+            
+            state.micMuted = !state.micMuted;
+            audioTracks.forEach(track => {
+                track.enabled = !state.micMuted;
+            });
+            
+            // Update UI
+            const micBtn = document.getElementById('micBtn');
+            const micStatus = document.getElementById('micStatus');
+            
+            if (state.micMuted) {
+                micBtn.textContent = '🎤 Unmute Mic';
+                micBtn.className = 'btn btn-danger';
+                micStatus.textContent = 'OFF';
+                micStatus.className = 'badge bg-danger';
+                log('🔇 Microphone muted');
+            } else {
+                micBtn.textContent = '🎤 Mute Mic';
+                micBtn.className = 'btn btn-secondary';
+                micStatus.textContent = 'ON';
+                micStatus.className = 'badge bg-success';
+                log('🔊 Microphone unmuted');
+            }
+        }
+
+        // ===== List Participants =====
+        async function listParticipants() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/live/participants/${roomId}`, {
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    state.publishers = data.participants.filter(p => p.publisher);
+                    
+                    const container = document.getElementById('participantsList');
+                    container.innerHTML = '<h5>Active Streams:</h5>';
+                    
+                    if (state.publishers.length === 0) {
+                        container.innerHTML += '<p class="text-muted">No one is streaming yet</p>';
+                    }
+                    
+                    state.publishers.forEach(p => {
+                        container.innerHTML += `
+                            <div class="alert alert-info">
+                                <strong>${p.display}</strong> (Feed ID: ${p.id})
+                                <button onclick="subscribeToPublisher(${p.id}, '${p.display}')" class="btn btn-sm btn-primary float-end">Watch</button>
+                            </div>
+                        `;
+                    });
+                    
+                    log(`✅ Found ${state.publishers.length} active stream(s)`);
+                } else {
+                    log(`List participants failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+
+        // ===== Subscribe to Publisher =====
+        async function subscribeToPublisher(feedId, displayName) {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                log(`Subscribing to ${displayName} (feed ${feedId})...`);
+                
+                // Step 1: Subscribe (backend will create new session/handle for this feed)
+                const subscribeResponse = await fetch(`${API_BASE}/live/subscribe`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({
+                        roomId: parseInt(roomId),
+                        feedId: feedId
+                        // Note: No need to send sessionId/handleId, backend creates new ones
+                    })
+                });
+                
+                const subscribeData = await subscribeResponse.json();
+                
+                if (!subscribeResponse.ok || !subscribeData.sdpOffer) {
+                    log(`Subscribe failed: ${JSON.stringify(subscribeData)}`);
+                    return;
+                }
+                
+                log(`Received SDP offer, new session: ${subscribeData.sessionId}, handle: ${subscribeData.handleId}`);
+                
+                // Step 2: Create peer connection with ICE servers
+                const pcConfig = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+                const pc = new RTCPeerConnection(pcConfig);
+                state.subscriberPcs[feedId] = pc;
+                
+                // Handle incoming stream
+                pc.ontrack = (event) => {
+                    log(`🎬 ontrack event! Track kind: ${event.track.kind}, streams: ${event.streams.length}`);
+                    const [stream] = event.streams;
+                    if (stream) {
+                        log(`📺 Stream ID: ${stream.id}, tracks: ${stream.getTracks().length}`);
+                        addVideoElement(`remote-${feedId}`, stream, `Remote: ${displayName}`);
+                    } else {
+                        log('⚠️ No stream in ontrack event!');
+                    }
+                };
+                
+                // Monitor ICE connection state
+                pc.oniceconnectionstatechange = () => {
+                    log(`🔌 ICE connection state: ${pc.iceConnectionState}`);
+                };
+                
+                pc.onconnectionstatechange = () => {
+                    log(`🔗 Connection state: ${pc.connectionState}`);
+                };
+                
+                // Set remote description (SDP offer from Janus)
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: 'offer',
+                    sdp: subscribeData.sdpOffer
+                }));
+                
+                // Create answer
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                // Wait for ICE gathering to complete (like publisher)
+                if (pc.iceGatheringState !== 'complete') {
+                    log(`⏳ Waiting for subscriber ICE gathering... (state: ${pc.iceGatheringState})`);
+                    
+                    pc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            log(`🔍 Subscriber ICE candidate: ${event.candidate.type}`);
+                        } else {
+                            log('🔍 Subscriber ICE gathering finished');
+                        }
+                    };
+                    
+                    await new Promise((resolve) => {
+                        const checkState = () => {
+                            if (pc.iceGatheringState === 'complete') {
+                                log(`✅ Subscriber ICE gathering complete`);
+                                resolve();
+                            }
+                        };
+                        pc.addEventListener('icegatheringstatechange', checkState);
+                        setTimeout(() => {
+                            pc.removeEventListener('icegatheringstatechange', checkState);
+                            log(`⚠️ Subscriber ICE timeout (state: ${pc.iceGatheringState}), proceeding`);
+                            resolve();
+                        }, 5000);
+                    });
+                } else {
+                    log('✅ Subscriber ICE already complete');
+                }
+                
+                // Use final SDP with ICE candidates
+                const finalAnswer = pc.localDescription;
+                
+                // Step 3: Start subscriber (send SDP answer)
+                // Use the NEW sessionId and handleId returned from subscribe
+                const startResponse = await fetch(`${API_BASE}/live/start-subscriber`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({
+                        sessionId: subscribeData.sessionId,  // Use new session
+                        handleId: subscribeData.handleId,    // Use new handle
+                        sdpAnswer: finalAnswer.sdp           // Use final SDP with ICE
+                    })
+                });
+                
+                if (startResponse.ok) {
+                    log(`✅ Subscribed to ${displayName} successfully`);
+
+                    // Start keepalive for this feed's subscriber session
+                    startKeepalive(`subscriber-${feedId}`, subscribeData.sessionId);
+                    
+                    // Store session for cleanup later
+                    state.subscriberSessions = state.subscriberSessions || {};
+                    state.subscriberSessions[feedId] = {
+                        sessionId: subscribeData.sessionId,
+                        handleId: subscribeData.handleId
+                    };
+                } else {
+                    log(`❌ Start subscriber failed`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // ===== Subscribe to All Publishers =====
+        async function subscribeToAll() {
+            if (state.publishers.length === 0) {
+                alert('Please list participants first');
+                return;
+            }
+            
+            for (const publisher of state.publishers) {
+                await subscribeToPublisher(publisher.id, publisher.display);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Delay between subscriptions
+            }
+        }
+
+        // ===== Keepalive helpers =====
+        async function sendKeepalive(sessionId) {
+            try {
+                await fetch(`${API_BASE}/live/keepalive/${sessionId}`, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+                log(`💓 Keepalive sent for session ${sessionId}`);
+            } catch (e) {
+                log(`❌ Keepalive error for session ${sessionId}: ${e.message}`);
+            }
+        }
+
+        function startKeepalive(key, sessionId) {
+            stopKeepalive(key);
+            if (!sessionId) return;
+            state.keepaliveTimers[key] = setInterval(() => sendKeepalive(sessionId), 30000);
+            log(`⏱️ Keepalive started for ${key} (session ${sessionId})`);
+        }
+
+        function stopKeepalive(key) {
+            if (state.keepaliveTimers[key]) {
+                clearInterval(state.keepaliveTimers[key]);
+                delete state.keepaliveTimers[key];
+                log(`🛑 Keepalive stopped for ${key}`);
+            }
+        }
+
+        // Initial log
+        log('🚀 Live Streaming Test Page Loaded');
+        log('📝 Enter your access token and click "Save Tokens" to begin');
+        log('💡 Everyone joins as Publisher - you can stream or just watch others!');
+    </script>
+</body>
+</html>
+
+

@@ -36,7 +36,13 @@ public class SecurityConfig {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/payments/webhook/**"
+            "/payments/webhook/**",
+            "/live-test.html",
+            "/confirmation.html",
+            "/css/**",
+            "/js/**",
+            "/email/**",
+            "/payment/**"
     };
 
     @Bean
