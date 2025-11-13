@@ -21,5 +21,17 @@ public class PublishStreamRequest {
      * Optional - defaults to "camera"
      */
     private String streamType;
+    
+    /**
+     * Session ID from Join (optional)
+     * If not provided, will use session from Start Live (for instructor direct publish)
+     */
+    private Long sessionId;
+    
+    /**
+     * Handle ID from Join (optional)
+     * If not provided, will use handle from Start Live (for instructor direct publish)
+     */
+    private Long handleId;
 }
 

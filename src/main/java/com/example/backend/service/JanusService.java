@@ -50,6 +50,35 @@ public class JanusService {
     }
     
     /**
+     * Send keepalive to Janus session to prevent timeout
+     */
+    public JanusResponse keepAlive(Long sessionId) {
+        log.info("Sending keepalive for session {}", sessionId);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("janus", "keepalive");
+        request.put("transaction", generateTransactionId());
+
+        String url = janusServerUrl + "/" + sessionId;
+
+        try {
+            @SuppressWarnings("rawtypes")
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    url,
+                    request,
+                    Map.class
+            );
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = response.getBody();
+            return mapToJanusResponse(body);
+        } catch (Exception e) {
+            log.error("Error sending keepalive: {}", e.getMessage(), e);
+            throw new InternalServerError("Failed to send keepalive: " + e.getMessage());
+        }
+    }
+
+    /**
      * Attach plugin videoroom
      */
     public JanusResponse attachPlugin(Long sessionId) {
@@ -158,6 +187,7 @@ public class JanusService {
      */
     public JanusResponse publishStream(Long sessionId, Long handleId, String sdp) {
         log.info("Publishing stream in session {} with handle {}", sessionId, handleId);
+        log.debug("SDP offer (first 200 chars): {}", sdp.substring(0, Math.min(200, sdp.length())));
         
         Map<String, Object> body = new HashMap<>();
         body.put("request", "publish");
@@ -173,6 +203,7 @@ public class JanusService {
         request.put("jsep", jsep);
         
         String url = janusServerUrl + "/" + sessionId + "/" + handleId;
+        log.info("Publishing to URL: {}", url);
         
         try {
             @SuppressWarnings("rawtypes")
@@ -184,7 +215,89 @@ public class JanusService {
             
             @SuppressWarnings("unchecked")
             Map<String, Object> responseBody = response.getBody();
-            return mapToJanusResponse(responseBody);
+            JanusResponse janusResponse = mapToJanusResponse(responseBody);
+            
+            log.info("Publish response - janus: {}, error: {}", janusResponse.getJanus(), janusResponse.getError());
+            
+            // If we got ACK, need to wait for event with JSEP
+            // For REST API, we can't easily get the event, so we need to poll or use long-polling
+            if ("ack".equals(janusResponse.getJanus())) {
+                log.warn("Received ACK for publish, waiting for event with SDP answer...");
+                // Try to get event (with retry and longer timeout)
+                try {
+                    // Retry up to 3 times with 500ms between each
+                    for (int attempt = 0; attempt < 3; attempt++) {
+                        Thread.sleep(500); // Wait 500ms for Janus to process
+                        
+                        log.info("Polling for events (attempt {}/3)...", attempt + 1);
+                        
+                        // Make another request to get pending events
+                        @SuppressWarnings("rawtypes")
+                        ResponseEntity<Map> eventResponse = restTemplate.getForEntity(
+                            janusServerUrl + "/" + sessionId + "?maxev=1",
+                            Map.class
+                        );
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> eventBody = eventResponse.getBody();
+                    
+                    if (eventBody != null) {
+                        String janusType = (String) eventBody.get("janus");
+                        log.info("Polled event type: {}, full response: {}", janusType, eventBody);
+                        
+                        if ("event".equals(janusType)) {
+                            janusResponse = mapToJanusResponse(eventBody);
+                            
+                            log.info("After mapping - JSEP present: {}, plugindata present: {}", 
+                                janusResponse.getJsep() != null, 
+                                janusResponse.getPlugindata() != null);
+                            
+                            // Check if event contains error
+                            if (janusResponse.getPlugindata() != null) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> pluginData = (Map<String, Object>) janusResponse.getPlugindata().get("data");
+                                if (pluginData != null && pluginData.containsKey("error_code")) {
+                                    log.error("Janus plugin error: {} - {}", 
+                                        pluginData.get("error_code"), 
+                                        pluginData.get("error"));
+                                    janusResponse.setError((String) pluginData.get("error"));
+                                    janusResponse.setErrorCode(((Number) pluginData.get("error_code")).intValue());
+                                } else {
+                                    log.info("Event has plugindata but no error");
+                                }
+                            }
+                            
+                            if (janusResponse.getJsep() != null) {
+                                log.info("Got event response with JSEP - type: {}", janusResponse.getJsep().get("type"));
+                                break; // Found JSEP, stop polling
+                            } else {
+                                log.warn("Event response mapped but JSEP is still null, will retry...");
+                            }
+                        } else if ("error".equals(janusType)) {
+                            janusResponse = mapToJanusResponse(eventBody);
+                            log.error("Janus error response: {}", janusResponse.getError());
+                            break; // Error, stop polling
+                        } else {
+                            log.warn("Unexpected janus type: {}, will retry...", janusType);
+                        }
+                    } else {
+                        log.warn("Event body is null after polling, will retry...");
+                    }
+                    } // end of for loop
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Interrupted while waiting for event: {}", e.getMessage());
+                } catch (Exception e) {
+                    log.warn("Failed to get event: {}", e.getMessage());
+                }
+            }
+            
+            if (janusResponse.getJsep() != null) {
+                log.info("Publish successful - SDP answer received");
+            } else {
+                log.warn("Publish response has no JSEP (SDP answer) - may need to wait longer");
+            }
+            
+            return janusResponse;
         } catch (Exception e) {
             log.error("Error publishing stream: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to publish stream: " + e.getMessage());
@@ -262,13 +375,19 @@ public class JanusService {
     /**
      * Configure subscriber to receive stream from a publisher
      * Janus will return SDP offer in response
+     * 
+     * Note: For VideoRoom subscriber, we use "join" with feed parameter
      */
-    public JanusResponse configureSubscriber(Long sessionId, Long handleId, Long feedId) {
-        log.info("Configuring subscriber to receive feed: {}", feedId);
+    public JanusResponse configureSubscriber(Long sessionId, Long handleId, Long roomId, Long feedId) {
+        log.info("Subscribing to feed: {} in room: {} (using join request)", feedId, roomId);
         
         Map<String, Object> body = new HashMap<>();
-        body.put("request", "configure");
+        body.put("request", "join");
+        body.put("room", roomId);  // Required!
+        body.put("ptype", "subscriber");
         body.put("feed", feedId);
+        body.put("offer_audio", true);
+        body.put("offer_video", true);
         
         Map<String, Object> request = new HashMap<>();
         request.put("janus", "message");
@@ -287,7 +406,79 @@ public class JanusService {
             
             @SuppressWarnings("unchecked")
             Map<String, Object> responseBody = response.getBody();
-            return mapToJanusResponse(responseBody);
+            JanusResponse janusResponse = mapToJanusResponse(responseBody);
+            
+            log.info("Configure subscriber response - janus: {}, error: {}", janusResponse.getJanus(), janusResponse.getError());
+            
+            // If we got ACK, need to wait for event with SDP offer (similar to publish)
+            if ("ack".equals(janusResponse.getJanus())) {
+                log.warn("Received ACK for configure subscriber, waiting for event with SDP offer...");
+                try {
+                    // Retry up to 3 times with 500ms between each
+                    for (int attempt = 0; attempt < 3; attempt++) {
+                        Thread.sleep(500);
+                        
+                        log.info("Polling for subscriber events (attempt {}/3)...", attempt + 1);
+                        
+                        @SuppressWarnings("rawtypes")
+                        ResponseEntity<Map> eventResponse = restTemplate.getForEntity(
+                            janusServerUrl + "/" + sessionId + "?maxev=1",
+                            Map.class
+                        );
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> eventBody = eventResponse.getBody();
+                    
+                        if (eventBody != null) {
+                            String janusType = (String) eventBody.get("janus");
+                            log.info("Polled subscriber event type: {}", janusType);
+                            
+                            if ("event".equals(janusType)) {
+                                janusResponse = mapToJanusResponse(eventBody);
+                                
+                                // Check if event contains error
+                                if (janusResponse.getPlugindata() != null) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> pluginData = (Map<String, Object>) janusResponse.getPlugindata().get("data");
+                                    if (pluginData != null && pluginData.containsKey("error_code")) {
+                                        log.error("Janus plugin error: {} - {}", 
+                                            pluginData.get("error_code"), 
+                                            pluginData.get("error"));
+                                        janusResponse.setError((String) pluginData.get("error"));
+                                        janusResponse.setErrorCode(((Number) pluginData.get("error_code")).intValue());
+                                        break;
+                                    }
+                                }
+                                
+                                if (janusResponse.getJsep() != null) {
+                                    log.info("Got subscriber event with JSEP offer - type: {}", janusResponse.getJsep().get("type"));
+                                    break; // Found JSEP, stop polling
+                                } else {
+                                    log.warn("Subscriber event has no JSEP, will retry...");
+                                }
+                            } else if ("error".equals(janusType)) {
+                                janusResponse = mapToJanusResponse(eventBody);
+                                log.error("Janus error response: {}", janusResponse.getError());
+                                break;
+                            }
+                        } else {
+                            log.warn("Event body is null, will retry...");
+                        }
+                    } // end of for loop
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Interrupted while waiting for subscriber event: {}", e.getMessage());
+                } catch (Exception e) {
+                    log.warn("Failed to get subscriber event: {}", e.getMessage());
+                }
+            }
+            
+            if (janusResponse.getJsep() != null) {
+                log.info("Configure subscriber successful - SDP offer received");
+            } else {
+                log.warn("Configure subscriber has no JSEP (SDP offer) - may need to wait longer");
+            }
+            
+            return janusResponse;
         } catch (Exception e) {
             log.error("Error configuring subscriber: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to configure subscriber: " + e.getMessage());

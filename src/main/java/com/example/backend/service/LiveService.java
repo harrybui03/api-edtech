@@ -18,7 +18,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.Random;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +36,9 @@ public class LiveService {
     private final LiveSessionMapper liveSessionMapper;
     
     private final Random random = new Random();
+
+    // Keepalive timers for Janus sessions started by backend (publisher main session)
+    private final Map<Long, Timer> sessionKeepaliveTimers = new ConcurrentHashMap<>();
     
     /**
      * Bắt đầu live streaming
@@ -55,12 +62,12 @@ public class LiveService {
             throw new ForbiddenException("You are not an instructor of this batch");
         }
         
-        // Check if there's already an active session for this batch
-        liveSessionRepository.findByBatchIdAndStatus(batch.getId(), LiveSession.LiveStatus.ACTIVE)
+        // Check if there's already a published session for this batch
+        liveSessionRepository.findByBatchIdAndStatus(batch.getId(), LiveSession.LiveStatus.PUBLISHED)
                 .stream()
                 .findFirst()
                 .ifPresent(session -> {
-                    throw new IllegalStateException("There is already an active live session for this batch");
+                    throw new IllegalStateException("There is already a published live session for this batch");
                 });
         
         // Step 1: Create Janus session
@@ -94,13 +101,16 @@ public class LiveService {
                 .roomId(roomId)
                 .instructor(instructor)
                 .batch(batch)
-                .status(LiveSession.LiveStatus.ACTIVE)
+                .status(LiveSession.LiveStatus.PUBLISHED)
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .startedAt(OffsetDateTime.now())
                 .build();
         
         liveSession = liveSessionRepository.save(liveSession);
+
+        // Start keepalive for the backend-managed publisher session
+        startKeepalive(sessionId);
         
         log.info("Live session started successfully with room ID: {}", roomId);
         
@@ -120,8 +130,8 @@ public class LiveService {
         LiveSession liveSession = liveSessionRepository.findByRoomId(request.getRoomId())
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        if (liveSession.getStatus() != LiveSession.LiveStatus.ACTIVE) {
-            throw new IllegalStateException("Live session is not active");
+        if (liveSession.getStatus() != LiveSession.LiveStatus.PUBLISHED) {
+            throw new IllegalStateException("Live session is not published");
         }
         
         // For simplicity, create a new session and handle for each participant
@@ -145,7 +155,11 @@ public class LiveService {
         }
         
         // Join room
-        String displayName = currentUser.getFullName();
+        // Use display name from request if provided, otherwise use user's full name
+        String displayName = (request.getDisplayName() != null && !request.getDisplayName().trim().isEmpty())
+                ? request.getDisplayName().trim()
+                : currentUser.getFullName();
+        
         JanusResponse joinResponse = janusService.joinRoom(
                 sessionId, 
                 handleId, 
@@ -154,7 +168,15 @@ public class LiveService {
                 displayName
         );
         
-        log.info("User {} joined room {} as {}", currentUser.getFullName(), request.getRoomId(), request.getPtype());
+        // Start keepalive for this session (both publisher and subscriber)
+        startKeepalive(sessionId);
+        
+        // Add sessionId and handleId to response for frontend to use in publish
+        joinResponse.setSessionId(sessionId);
+        joinResponse.setHandleId(handleId);
+        
+        log.info("User {} joined room {} as {} (session: {}, handle: {})", 
+                currentUser.getFullName(), request.getRoomId(), request.getPtype(), sessionId, handleId);
         
         return joinResponse;
     }
@@ -170,13 +192,24 @@ public class LiveService {
         LiveSession liveSession = liveSessionRepository.findByRoomId(request.getRoomId())
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        if (liveSession.getStatus() != LiveSession.LiveStatus.ACTIVE) {
-            throw new IllegalStateException("Live session is not active");
+        if (liveSession.getStatus() != LiveSession.LiveStatus.PUBLISHED) {
+            throw new IllegalStateException("Live session is not published");
         }
         
+        // Use sessionId/handleId from request (from Join) if provided
+        // Otherwise use from liveSession (from Start Live - for instructor direct publish)
+        Long sessionId = request.getSessionId() != null 
+                ? request.getSessionId() 
+                : liveSession.getJanusSessionId();
+        Long handleId = request.getHandleId() != null 
+                ? request.getHandleId() 
+                : liveSession.getJanusHandleId();
+        
+        log.info("Publishing with sessionId: {}, handleId: {}", sessionId, handleId);
+        
         JanusResponse janusResponse = janusService.publishStream(
-                liveSession.getJanusSessionId(), 
-                liveSession.getJanusHandleId(), 
+                sessionId, 
+                handleId, 
                 request.getSdp()
         );
         
@@ -191,8 +224,8 @@ public class LiveService {
         return PublishStreamResponse.builder()
                 .sdpAnswer(sdpAnswer)
                 .type(type)
-                .sessionId(janusResponse.getSessionId())
-                .handleId(janusResponse.getHandleId())
+                .sessionId(sessionId)
+                .handleId(handleId)
                 .error(janusResponse.getError())
                 .errorCode(janusResponse.getErrorCode())
                 .build();
@@ -209,8 +242,8 @@ public class LiveService {
         LiveSession liveSession = liveSessionRepository.findByRoomId(request.getRoomId())
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        if (liveSession.getStatus() != LiveSession.LiveStatus.ACTIVE) {
-            throw new IllegalStateException("Live session is not active");
+        if (liveSession.getStatus() != LiveSession.LiveStatus.PUBLISHED) {
+            throw new IllegalStateException("Live session is not published");
         }
         
         // Tạo session và handle riêng cho screen share
@@ -238,6 +271,9 @@ public class LiveService {
         String displayName = currentUser.getFullName() + " (Screen)";
         janusService.joinRoom(screenSessionId, screenHandleId, request.getRoomId(), "publisher", displayName);
         
+        // Start keepalive for screen session
+        startKeepalive(screenSessionId);
+        
         // Publish screen stream với session/handle riêng
         JanusResponse janusResponse = janusService.publishStream(
                 screenSessionId, 
@@ -252,6 +288,8 @@ public class LiveService {
             type = (String) janusResponse.getJsep().get("type");
             sdpAnswer = (String) janusResponse.getJsep().get("sdp");
         }
+        
+        log.info("Screen share published with sessionId: {}, handleId: {} (keepalive started)", screenSessionId, screenHandleId);
         
         return PublishStreamResponse.builder()
                 .sdpAnswer(sdpAnswer)
@@ -290,6 +328,9 @@ public class LiveService {
         liveSessionRepository.findByRoomId(request.getRoomId())
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
+        // Stop keepalive for screen session
+        stopKeepalive(request.getScreenSessionId());
+        
         // Unpublish screen stream
         JanusResponse unpublishResponse = janusService.unpublishStream(
                 request.getScreenSessionId(),
@@ -298,6 +339,8 @@ public class LiveService {
         
         // Destroy screen session
         janusService.destroySession(request.getScreenSessionId());
+        
+        log.info("Screen share unpublished, session destroyed, keepalive stopped");
         
         return unpublishResponse;
     }
@@ -347,7 +390,9 @@ public class LiveService {
     
     /**
      * Subscribe to a publisher's stream
-     * Step 1: Configure subscriber - Janus trả về SDP offer
+     * Step 1: Create new handle for this specific feed and get SDP offer
+     * 
+     * Note: Mỗi feed cần 1 handle riêng theo Janus VideoRoom design
      */
     public SubscribeResponse subscribe(SubscribeRequest request) {
         log.info("Subscribing to feed {} in room {}", request.getFeedId(), request.getRoomId());
@@ -356,10 +401,36 @@ public class LiveService {
         liveSessionRepository.findByRoomId(request.getRoomId())
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        // Configure subscriber - Janus sẽ trả về SDP offer
+        // Create new session and handle for this specific feed
+        // (Janus VideoRoom requires separate handle per subscribed feed)
+        JanusResponse sessionResponse = janusService.createSession();
+        Long sessionId = sessionResponse.getData() != null 
+                ? ((Number) sessionResponse.getData().get("id")).longValue() 
+                : null;
+        
+        if (sessionId == null) {
+            throw new RuntimeException("Failed to create Janus session for subscriber");
+        }
+        
+        JanusResponse attachResponse = janusService.attachPlugin(sessionId);
+        Long handleId = attachResponse.getData() != null 
+                ? ((Number) attachResponse.getData().get("id")).longValue() 
+                : null;
+        
+        if (handleId == null) {
+            throw new RuntimeException("Failed to attach plugin for subscriber");
+        }
+        
+        // Start keepalive for this subscriber session
+        startKeepalive(sessionId);
+        
+        log.info("Created subscriber session: {}, handle: {} for feed: {}", sessionId, handleId, request.getFeedId());
+        
+        // Join as subscriber with feed - Janus sẽ trả về SDP offer
         JanusResponse configureResponse = janusService.configureSubscriber(
-                request.getSessionId(),
-                request.getHandleId(),
+                sessionId,
+                handleId,
+                request.getRoomId(),  // Pass room ID
                 request.getFeedId()
         );
         
@@ -374,8 +445,8 @@ public class LiveService {
         return SubscribeResponse.builder()
                 .sdpOffer(sdpOffer)
                 .type(type)
-                .sessionId(request.getSessionId())
-                .handleId(request.getHandleId())
+                .sessionId(sessionId)  // Return new session
+                .handleId(handleId)    // Return new handle
                 .feedId(request.getFeedId())
                 .error(configureResponse.getError())
                 .errorCode(configureResponse.getErrorCode())
@@ -390,6 +461,33 @@ public class LiveService {
         log.info("Starting subscriber with SDP answer");
         
         return janusService.startSubscriber(request.getSessionId(), request.getHandleId(), request.getSdpAnswer());
+    }
+
+    /**
+     * Send keepalive for a given Janus session
+     */
+    public JanusResponse keepAlive(Long sessionId) {
+        log.info("Keepalive for session {}", sessionId);
+        return janusService.keepAlive(sessionId);
+    }
+    
+    /**
+     * Leave room (for participants to clean up their session)
+     */
+    public void leaveRoom(Long sessionId) {
+        log.info("Participant leaving room, cleaning up session: {}", sessionId);
+        
+        // Stop keepalive for this session
+        stopKeepalive(sessionId);
+        
+        // Destroy session in Janus
+        try {
+            janusService.destroySession(sessionId);
+        } catch (Exception e) {
+            log.warn("Failed to destroy session {} in Janus: {}", sessionId, e.getMessage());
+        }
+        
+        log.info("Participant left room successfully");
     }
     
     /**
@@ -410,8 +508,8 @@ public class LiveService {
             throw new ForbiddenException("Only the instructor who started the session can end it");
         }
         
-        if (liveSession.getStatus() != LiveSession.LiveStatus.ACTIVE) {
-            throw new IllegalStateException("Live session is not active");
+        if (liveSession.getStatus() != LiveSession.LiveStatus.PUBLISHED) {
+            throw new IllegalStateException("Live session is not published");
         }
         
         // Destroy room in Janus
@@ -424,6 +522,12 @@ public class LiveService {
         // Destroy session in Janus
         janusService.destroySession(liveSession.getJanusSessionId());
         
+        // Stop keepalive timer for main session
+        stopKeepalive(liveSession.getJanusSessionId());
+        
+        // Stop all keepalive timers (for all participants)
+        stopAllKeepalives();
+
         // Update session status
         liveSession.setStatus(LiveSession.LiveStatus.ENDED);
         liveSession.setEndedAt(OffsetDateTime.now());
@@ -454,6 +558,40 @@ public class LiveService {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new DataNotFoundException("User not found with email: " + email));
+    }
+
+    private void startKeepalive(Long sessionId) {
+        stopKeepalive(sessionId); // ensure previous timer cleared
+        Timer timer = new Timer("janus-keepalive-" + sessionId, true);
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                try {
+                    janusService.keepAlive(sessionId);
+                    log.debug("Keepalive sent for session {}", sessionId);
+                } catch (Exception ex) {
+                    log.warn("Keepalive failed for session {}: {}", sessionId, ex.getMessage());
+                }
+            }
+        }, 30000L, 30000L); // start after 30s, repeat every 30s
+        sessionKeepaliveTimers.put(sessionId, timer);
+    }
+
+    private void stopKeepalive(Long sessionId) {
+        Timer t = sessionKeepaliveTimers.remove(sessionId);
+        if (t != null) {
+            t.cancel();
+            log.debug("Keepalive stopped for session {}", sessionId);
+        }
+    }
+
+    private void stopAllKeepalives() {
+        sessionKeepaliveTimers.forEach((sessionId, timer) -> {
+            timer.cancel();
+            log.debug("Keepalive stopped for session {}", sessionId);
+        });
+        sessionKeepaliveTimers.clear();
+        log.info("All keepalive timers stopped");
     }
 }
 

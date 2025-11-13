@@ -65,7 +65,7 @@ public class LiveSession {
     private OffsetDateTime updatedAt;
     
     public enum LiveStatus {
-        ACTIVE,
+        PUBLISHED,
         ENDED
     }
 }

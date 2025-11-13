@@ -104,8 +104,16 @@ public class LiveController {
     }
     
     /**
-     * End live streaming
+     * Leave room (for participants)
      */
+    @PostMapping("/leave/{sessionId}")
+    @Operation(summary = "Leave room", description = "Participant leaves the room and cleans up their session")
+    public ResponseEntity<Void> leaveRoom(@PathVariable Long sessionId) {
+        log.info("Request to leave room for session: {}", sessionId);
+        liveService.leaveRoom(sessionId);
+        return ResponseEntity.ok().build();
+    }
+    
     @PostMapping("/end/{roomId}")
     @PreAuthorize("hasRole('COURSE_CREATOR')")
     @Operation(summary = "End live streaming", description = "Instructor ends the live streaming session")
@@ -159,6 +167,17 @@ public class LiveController {
     public ResponseEntity<JanusResponse> startSubscriber(@Valid @RequestBody StartSubscriberRequest request) {
         log.info("Request to start subscriber");
         JanusResponse response = liveService.startSubscriber(request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Keepalive a Janus session
+     */
+    @PostMapping("/keepalive/{sessionId}")
+    @Operation(summary = "Send keepalive", description = "Send keepalive to Janus to prevent session timeout")
+    public ResponseEntity<JanusResponse> keepAlive(@PathVariable Long sessionId) {
+        log.info("Request to keepalive session: {}", sessionId);
+        JanusResponse response = liveService.keepAlive(sessionId);
         return ResponseEntity.ok(response);
     }
 }

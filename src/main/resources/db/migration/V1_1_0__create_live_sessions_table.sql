@@ -6,7 +6,7 @@ CREATE TABLE live_sessions (
     room_id BIGINT NOT NULL,
     instructor_id UUID NOT NULL REFERENCES users(id),
     batch_id UUID REFERENCES batch(id),
-    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    status VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
     title VARCHAR(255),
     description TEXT,
     started_at TIMESTAMP WITH TIME ZONE,
