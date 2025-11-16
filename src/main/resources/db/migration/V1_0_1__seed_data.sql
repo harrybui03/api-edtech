@@ -18,10 +18,10 @@ INSERT INTO users (id, email, username, full_name, user_type, enabled) VALUES
                                                                            (sys_manager_id, 'manager@example.com', 'sysmanager', 'System Manager', 'SYSTEM_USER', true),
                                                                            (admin_id, 'admin@example.com', 'adminuser', 'Admin User', 'SYSTEM_USER', true),
                                                                            (moderator_id, 'moderator@example.com', 'moduser', 'Moderator User', 'SYSTEM_USER', true),
-                                                                           (creator1_id, 'creator1@example.com', 'creator1', 'Course Creator One', 'WEBSITE_USER', true),
+                                                                           (creator1_id, 'duckie010203@gmail.com', 'creator1', 'Course Creator One', 'WEBSITE_USER', true),
                                                                            (creator2_id, 'creator2@example.com', 'creator2', 'Course Creator Two', 'WEBSITE_USER', true),
                                                                            (evaluator_id, 'evaluator@example.com', 'evaluator', 'Batch Evaluator', 'WEBSITE_USER', true),
-                                                                           (student1_id, 'student1@example.com', 'student1', 'Student One', 'WEBSITE_USER', true),
+                                                                           (student1_id, 'duckiiduckie@gmail.com', 'student1', 'Student One', 'WEBSITE_USER', true),
                                                                            (student2_id, 'student2@example.com', 'student2', 'Student Two', 'WEBSITE_USER', true),
                                                                            (student3_id, 'student3@example.com', 'student3', 'Student Three', 'WEBSITE_USER', true),
                                                                            (multi_role_user_id, 'multi.role@example.com', 'multirole', 'Multi Role User', 'WEBSITE_USER', true);

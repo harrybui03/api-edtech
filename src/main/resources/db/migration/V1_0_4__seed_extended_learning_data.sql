@@ -27,8 +27,8 @@ DECLARE
 
 BEGIN
     -- 1. GET USER IDs FROM PREVIOUS MIGRATION
-    SELECT id INTO instructor_id FROM users WHERE email = 'creator1@example.com';
-    SELECT id INTO student1_id FROM users WHERE email = 'student1@example.com';
+    SELECT id INTO instructor_id FROM users WHERE email = 'duckie010203@gmail.com';
+    SELECT id INTO student1_id FROM users WHERE email = 'duckiiduckie@gmail.com';
     SELECT id INTO student2_id FROM users WHERE email = 'student2@example.com';
     SELECT id INTO student3_id FROM users WHERE email = 'student3@example.com';
 
