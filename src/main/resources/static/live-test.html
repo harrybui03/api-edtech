@@ -109,32 +109,42 @@
 
         <!-- Join & Publish Section -->
         <div class="section">
-            <h3>📹 Room Controls</h3>
+            <h3>📹 Join Room & Publish Streams</h3>
             <div class="row g-3">
-                <div class="col-md-5">
+                <div class="col-md-6">
                     <label class="form-label">Room ID:</label>
                     <input type="text" id="joinRoomId" class="form-control" placeholder="Enter room ID">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label">Your Name (optional):</label>
                     <input type="text" id="displayName" class="form-control" placeholder="Enter your name">
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button onclick="joinRoom()" class="btn btn-primary w-100">Join Room</button>
-                </div>
             </div>
-            <div class="controls">
-                <button onclick="publishCamera()" class="btn btn-success">Publish Camera</button>
-                <button onclick="publishScreen()" class="btn btn-info">Publish Screen</button>
+            
+            <!-- Join Room Button -->
+            <div class="controls mt-3">
+                <button onclick="joinRoom()" class="btn btn-primary btn-lg">🚪 Join Room</button>
+                <small class="ms-2">Session: <span id="sessionStatus" class="badge bg-secondary">Not joined</span></small>
+            </div>
+            
+            <!-- Publish Buttons -->
+            <div class="controls mt-3">
+                <button onclick="publishCamera()" class="btn btn-success">📹 Publish Camera</button>
+                <button onclick="publishScreen()" class="btn btn-info">🖥️ Publish Screen</button>
                 <button onclick="toggleMic()" id="micBtn" class="btn btn-secondary">🎤 Mute Mic</button>
-                <button onclick="unpublishCamera()" class="btn btn-warning">Stop Camera</button>
-                <button onclick="unpublishScreen()" class="btn btn-warning">Stop Screen</button>
+                <button onclick="unpublishCamera()" class="btn btn-warning" id="stopCameraBtn">⏹️ Stop Camera</button>
+                <button onclick="unpublishScreen()" class="btn btn-warning">⏹️ Stop Screen</button>
             </div>
+            
             <div class="mt-2">
-                <small>Session ID: <strong id="publisherSessionId">-</strong></small> | 
-                <small>Handle ID: <strong id="publisherHandleId">-</strong></small> | 
+                <small>Room: <strong id="currentRoomId">-</strong></small> | 
+                <small>Session: <strong id="mainSessionId">-</strong></small> | 
                 <small>Mic: <span id="micStatus" class="badge bg-success">ON</span></small>
             </div>
+            <p class="text-muted mt-2 mb-0">
+                <small>💡 <strong>Best practice:</strong> Join room first → Then publish camera/screen</small><br>
+                <small>🔥 All operations (join, publish, subscribe) use the same session!</small>
+            </p>
         </div>
 
         <!-- Watch Others -->
@@ -168,20 +178,19 @@
         let accessToken = '';
         let refreshToken = '';
         
-        // State management
+        // State management - NEW ARCHITECTURE: 1 Session - Multiple Handles
         let state = {
             roomId: null,
-            publisherSessionId: null,
-            publisherHandleId: null,
-            subscriberSessionId: null,
-            subscriberHandleId: null,
+            mainSessionId: null,  // 🔥 ONE main session for all (join, publish, subscribe)
+            // Peer connections
             cameraPc: null,
+            cameraHandleId: null,
             screenPc: null,
-            screenSessionId: null,
             screenHandleId: null,
             subscriberPcs: {},
+            subscriberHandles: {},  // Track subscriber handles
             publishers: [],
-            keepaliveTimers: {},
+            keepaliveTimer: null,  // 🔥 ONE keepalive timer for main session
             micMuted: false,
             localStream: null
         };
@@ -333,13 +342,9 @@
             try {
                 const requestBody = { 
                     roomId: parseInt(roomId), 
-                    ptype: 'publisher'  // Always join as publisher
+                    ptype: 'publisher',  // Always join as publisher
+                    displayName: displayName || undefined
                 };
-                
-                // Add display name if provided
-                if (displayName) {
-                    requestBody.displayName = displayName;
-                }
                 
                 const response = await fetch(`${API_BASE}/live/join`, {
                     method: 'POST',
@@ -350,23 +355,27 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Save session and handle
-                    state.publisherSessionId = data.sessionId;
-                    state.publisherHandleId = data.handleId;
+                    // 🔥 Save main session ID - will be reused for ALL operations
+                    state.mainSessionId = data.sessionId;
+                    state.roomId = parseInt(roomId);
                     
-                    document.getElementById('publisherSessionId').textContent = state.publisherSessionId || 'N/A';
-                    document.getElementById('publisherHandleId').textContent = state.publisherHandleId || 'N/A';
+                    // Update UI
+                    document.getElementById('currentRoomId').textContent = roomId;
+                    document.getElementById('mainSessionId').textContent = state.mainSessionId;
+                    document.getElementById('sessionStatus').textContent = 'Joined ✅';
+                    document.getElementById('sessionStatus').className = 'badge bg-success';
                     
-                    if (state.publisherSessionId && state.publisherHandleId) {
-                        const name = displayName || 'default';
-                        log(`✅ Joined room (${name}). Session: ${state.publisherSessionId}, Handle: ${state.publisherHandleId}`);
-                        log(`💡 You can now publish your camera/screen or just subscribe to others`);
-                    } else {
-                        log(`⚠️ Joined but failed to extract session/handle from response:`);
-                        log(`📥 Response: ${JSON.stringify(data)}`);
-                    }
+                    // Start keepalive for main session
+                    startKeepalive(state.mainSessionId);
+                    
+                    const name = displayName || 'Anonymous';
+                    log(`✅ Joined room ${roomId} as publisher (${name})`);
+                    log(`🔥 Main session created: ${state.mainSessionId}`);
+                    log(`💡 This session will be reused for camera, screen, and subscribe!`);
                 } else {
                     log(`❌ Join failed: ${JSON.stringify(data)}`);
+                    document.getElementById('sessionStatus').textContent = 'Failed ❌';
+                    document.getElementById('sessionStatus').className = 'badge bg-danger';
                 }
             } catch (error) {
                 log(`❌ Error: ${error.message}`);
@@ -440,22 +449,34 @@
                 log('📤 Publishing camera stream...');
                 log(`SDP Offer (first 200 chars): ${finalOffer.sdp.substring(0, 200)}...`);
                 
-                // Send to backend (include sessionId/handleId from Join if available)
+                // Validate SDP doesn't have 0.0.0.0 (indicates no ICE candidates)
+                if (finalOffer.sdp.includes('c=IN IP4 0.0.0.0')) {
+                    log('⚠️ WARNING: SDP contains c=IN IP4 0.0.0.0 - ICE gathering may have failed!');
+                    log('⚠️ This will cause Janus to reject the offer with error 490');
+                    
+                    // Try to proceed anyway, but warn user
+                    const proceed = confirm('SDP has no valid ICE candidates (0.0.0.0). Try anyway?');
+                    if (!proceed) {
+                        log('❌ Publish cancelled by user');
+                        return;
+                    }
+                }
+                
+                // Check for valid ICE candidates in SDP
+                const hasCandidates = finalOffer.sdp.includes('a=candidate:');
+                log(`📊 SDP has ICE candidates: ${hasCandidates}`);
+                
+                // 🔥 Send to backend (backend auto-detects sessionId/handleId from DB!)
                 const publishPayload = { 
                     roomId: parseInt(roomId), 
                     sdp: finalOffer.sdp,  // Use final SDP with ICE candidates
                     streamType: 'camera'
                 };
                 
-                // If we joined as publisher, include session/handle from Join
-                if (state.publisherSessionId && state.publisherHandleId) {
-                    publishPayload.sessionId = state.publisherSessionId;
-                    publishPayload.handleId = state.publisherHandleId;
-                    log(`✅ Using session from Join: ${state.publisherSessionId}, handle: ${state.publisherHandleId}`);
-                } else {
-                    log('⚠️ Using session from Start Live (instructor direct publish). If you joined as publisher, this is wrong!');
-                    log(`State check: publisherSessionId=${state.publisherSessionId}, publisherHandleId=${state.publisherHandleId}`);
-                }
+                log('✅ Sending publish request (backend creates new session automatically)');
+                
+                // Update current room ID display
+                document.getElementById('currentRoomId').textContent = roomId;
                 
                 const response = await fetch(`${API_BASE}/live/publish`, {
                     method: 'POST',
@@ -466,11 +487,57 @@
                 const data = await response.json();
                 
                 if (response.ok && data.sdpAnswer) {
-                    await state.cameraPc.setRemoteDescription(new RTCSessionDescription({
-                        type: 'answer',
-                        sdp: data.sdpAnswer
-                    }));
-                    log('✅ Camera published successfully');
+                    log('📥 Received SDP answer from server');
+                    log(`SDP Answer (first 200 chars): ${data.sdpAnswer.substring(0, 200)}...`);
+                    
+                    // 🔥 Save camera handle (session is main session, already tracked)
+                    if (data.sessionId && data.handleId) {
+                        // Verify sessionId matches main session
+                        if (state.mainSessionId && data.sessionId !== state.mainSessionId) {
+                            log(`⚠️ Warning: Camera session ${data.sessionId} differs from main ${state.mainSessionId}`);
+                        }
+                        state.mainSessionId = data.sessionId;  // Ensure we have it
+                        state.cameraHandleId = data.handleId;
+                        log(`✅ Camera published: session ${state.mainSessionId}, handle: ${state.cameraHandleId}`);
+                    } else {
+                        log('⚠️ Backend did not return sessionId/handleId in response');
+                    }
+                    
+                    // Check if SDP contains ICE candidates
+                    if (data.sdpAnswer.includes('c=IN IP4 0.0.0.0')) {
+                        log('⚠️ WARNING: SDP answer contains 0.0.0.0 - may have ICE issues');
+                    }
+                    
+                    // Check peer connection state before setting remote description
+                    log(`📊 PeerConnection state before setRemoteDescription: ${state.cameraPc.signalingState}`);
+                    
+                    if (state.cameraPc.signalingState !== 'have-local-offer') {
+                        log(`❌ Invalid signaling state: ${state.cameraPc.signalingState}. Expected: have-local-offer`);
+                        throw new Error(`Cannot set remote answer in state: ${state.cameraPc.signalingState}`);
+                    }
+                    
+                    try {
+                        await state.cameraPc.setRemoteDescription(new RTCSessionDescription({
+                            type: 'answer',
+                            sdp: data.sdpAnswer
+                        }));
+                        log('✅ Remote description set successfully');
+                        log(`📊 PeerConnection state after: ${state.cameraPc.signalingState}`);
+                        log('✅ Camera published successfully');
+                    } catch (setRemoteError) {
+                        log(`❌ Error setting remote description: ${setRemoteError.message}`);
+                        log(`SDP Answer that caused error: ${data.sdpAnswer}`);
+                        throw setRemoteError;
+                    }
+                } else if (data.error) {
+                    log(`❌ Publish failed - Server error: ${data.error} (code: ${data.errorCode})`);
+                    if (data.errorCode === 490) {
+                        log('💡 ICE error 490 - This usually means:');
+                        log('   1. SDP offer has invalid ICE candidates');
+                        log('   2. SDP contains c=IN IP4 0.0.0.0');
+                        log('   3. STUN servers are not working');
+                        log('   Check your SDP offer above for 0.0.0.0 addresses');
+                    }
                 } else {
                     log(`❌ Publish failed: ${JSON.stringify(data)}`);
                 }
@@ -561,17 +628,21 @@
                 const data = await response.json();
                 
                 if (response.ok && data.sdpAnswer) {
-                    state.screenSessionId = data.sessionId;
-                    state.screenHandleId = data.handleId;
+                    // 🔥 Save screen handle (session is main session, already tracked)
+                    if (data.sessionId && data.handleId) {
+                        // Verify sessionId matches main session
+                        if (state.mainSessionId && data.sessionId !== state.mainSessionId) {
+                            log(`⚠️ Warning: Screen session ${data.sessionId} differs from main ${state.mainSessionId}`);
+                        }
+                        state.mainSessionId = data.sessionId;  // Ensure we have it
+                        state.screenHandleId = data.handleId;
+                    }
                     
                     await state.screenPc.setRemoteDescription(new RTCSessionDescription({
                         type: 'answer',
                         sdp: data.sdpAnswer
                     }));
-                    log(`✅ Screen published successfully. Session: ${state.screenSessionId}, Handle: ${state.screenHandleId}`);
-
-                    // Start keepalive for screen session
-                    startKeepalive('screen', state.screenSessionId);
+                    log(`✅ Screen published successfully. Session: ${state.mainSessionId}, Handle: ${state.screenHandleId}`);
                 } else {
                     log(`❌ Publish screen failed: ${JSON.stringify(data)}`);
                 }
@@ -582,6 +653,84 @@
 
         // ===== Unpublish Camera =====
         async function unpublishCamera() {
+            console.log('🔴 unpublishCamera() called!'); // Debug
+            log('🔴 unpublishCamera button clicked');
+            
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            log(`🔍 Room ID from input: "${roomId}"`);
+            
+            if (!roomId) {
+                const msg = 'Please enter room ID';
+                alert(msg);
+                log(`❌ Validation failed: ${msg}`);
+                return;
+            }
+            
+            try {
+                log('🛑 Stopping camera...');
+                
+                // Step 1: Stop ALL local stream tracks FIRST (this turns off camera LED)
+                if (state.localStream) {
+                    log('   Stopping local stream tracks...');
+                    state.localStream.getTracks().forEach(track => {
+                        log(`   - Stopping ${track.kind} track (id: ${track.id})`);
+                        track.stop();
+                    });
+                    state.localStream = null;
+                }
+                
+                // Step 2: Stop tracks from peer connection senders
+                if (state.cameraPc) {
+                    log('   Stopping peer connection senders...');
+                    state.cameraPc.getSenders().forEach(sender => {
+                        if (sender.track) {
+                            log(`   - Stopping sender ${sender.track.kind} track`);
+                            sender.track.stop();
+                        }
+                    });
+                    
+                    // Step 3: Close peer connection
+                    log('   Closing peer connection...');
+                    state.cameraPc.close();
+                    state.cameraPc = null;
+                }
+                
+                // Step 4: Remove video element
+                removeVideoElement('local-camera');
+                
+                // Step 5: Reset mic state
+                state.micMuted = false;
+                document.getElementById('micBtn').textContent = '🎤 Mute Mic';
+                document.getElementById('micBtn').className = 'btn btn-secondary';
+                document.getElementById('micStatus').textContent = 'ON';
+                document.getElementById('micStatus').className = 'badge bg-success';
+                
+                // Step 6: Notify backend (backend will destroy handle, keep session)
+                log('   Notifying backend...');
+                const response = await fetch(`${API_BASE}/live/unpublish/${roomId}`, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+                
+                if (response.ok) {
+                    log('✅ Camera unpublished and stopped completely');
+                    // Clear handle state (keep main session!)
+                    state.cameraHandleId = null;
+                } else {
+                    const data = await response.json();
+                    log(`❌ Unpublish camera failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`❌ Error in unpublishCamera: ${error.message}`);
+                console.error('❌ Unpublish error:', error);
+                alert(`Error stopping camera: ${error.message}`);
+            }
+            
+            console.log('🔴 unpublishCamera() finished');
+        }
+
+        // ===== Unpublish Screen =====
+        async function unpublishScreen() {
             const roomId = document.getElementById('joinRoomId').value.trim();
             
             if (!roomId) {
@@ -590,78 +739,41 @@
             }
             
             try {
-                if (state.cameraPc) {
-                    state.cameraPc.getSenders().forEach(sender => sender.track?.stop());
-                    state.cameraPc.close();
-                    state.cameraPc = null;
+                log('🛑 Stopping screen share...');
+                
+                // Stop all screen tracks
+                if (state.screenPc) {
+                    log('   Stopping screen peer connection...');
+                    state.screenPc.getSenders().forEach(sender => {
+                        if (sender.track) {
+                            sender.track.stop();
+                        }
+                    });
+                    state.screenPc.close();
+                    state.screenPc = null;
                 }
                 
-                // Stop local stream tracks
-                if (state.localStream) {
-                    state.localStream.getTracks().forEach(track => track.stop());
-                    state.localStream = null;
-                }
+                // Remove video element
+                removeVideoElement('local-screen');
                 
-                // Reset mic state
-                state.micMuted = false;
-                document.getElementById('micBtn').textContent = '🎤 Mute Mic';
-                document.getElementById('micBtn').className = 'btn btn-secondary';
-                document.getElementById('micStatus').textContent = 'ON';
-                document.getElementById('micStatus').className = 'badge bg-success';
-                
-                removeVideoElement('local-camera');
-                
-                const response = await fetch(`${API_BASE}/live/unpublish/${roomId}`, {
+                // Backend auto-detects screen session/handle from DB
+                log('   Notifying backend...');
+                const response = await fetch(`${API_BASE}/live/unpublish-screen/${roomId}`, {
                     method: 'POST',
                     headers: getHeaders()
                 });
                 
                 if (response.ok) {
-                    log('✅ Camera unpublished');
-                } else {
-                    log('❌ Unpublish camera failed');
-                }
-            } catch (error) {
-                log(`❌ Error: ${error.message}`);
-            }
-        }
-
-        // ===== Unpublish Screen =====
-        async function unpublishScreen() {
-            const roomId = document.getElementById('joinRoomId').value.trim();
-            
-            if (!roomId || !state.screenSessionId) {
-                return;
-            }
-            
-            try {
-                if (state.screenPc) {
-                    state.screenPc.getSenders().forEach(sender => sender.track?.stop());
-                    state.screenPc.close();
-                    state.screenPc = null;
-                }
-                
-                removeVideoElement('local-screen');
-                
-                const response = await fetch(`${API_BASE}/live/unpublish-screen`, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify({
-                        roomId: parseInt(roomId),
-                        screenSessionId: state.screenSessionId,
-                        screenHandleId: state.screenHandleId
-                    })
-                });
-                
-                if (response.ok) {
-                    log('✅ Screen unpublished');
-                    state.screenSessionId = null;
+                    log('✅ Screen share unpublished and stopped completely');
+                    // Clear handle state (keep main session!)
                     state.screenHandleId = null;
                 } else {
-                    log('❌ Unpublish screen failed');
+                    const data = await response.json();
+                    log(`❌ Unpublish screen failed: ${JSON.stringify(data)}`);
                 }
             } catch (error) {
-                log(`❌ Error: ${error.message}`);
+                log(`❌ Error in unpublishScreen: ${error.message}`);
+                console.error('Unpublish screen error:', error);
             }
         }
 
@@ -714,7 +826,11 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/live/participants/${roomId}`, {
+                // Backend automatically filters out all YOUR feeds (camera + screen)
+                // No need to manually exclude - it uses your auth token to identify you!
+                const url = `${API_BASE}/live/participants/${roomId}`;
+                
+                const response = await fetch(url, {
                     headers: getHeaders()
                 });
                 
@@ -724,27 +840,66 @@
                     state.publishers = data.participants.filter(p => p.publisher);
                     
                     const container = document.getElementById('participantsList');
-                    container.innerHTML = '<h5>Active Streams:</h5>';
+                    container.innerHTML = '<h5>🌐 Active Streams (Others):</h5>';
                     
                     if (state.publishers.length === 0) {
-                        container.innerHTML += '<p class="text-muted">No one is streaming yet</p>';
+                        container.innerHTML += '<p class="text-muted">No one else is streaming</p>';
                     }
                     
                     state.publishers.forEach(p => {
+                        // Identify feed type by display name
+                        const isScreen = p.display && p.display.includes('(Screen)');
+                        const icon = isScreen ? '🖥️' : '📹';
+                        
                         container.innerHTML += `
                             <div class="alert alert-info">
-                                <strong>${p.display}</strong> (Feed ID: ${p.id})
+                                ${icon} <strong>${p.display}</strong> (Feed ID: ${p.id})
                                 <button onclick="subscribeToPublisher(${p.id}, '${p.display}')" class="btn btn-sm btn-primary float-end">Watch</button>
                             </div>
                         `;
                     });
                     
-                    log(`✅ Found ${state.publishers.length} active stream(s)`);
+                    log(`✅ Found ${state.publishers.length} active stream(s) from others (your feeds auto-excluded)`);
                 } else {
-                    log(`List participants failed: ${JSON.stringify(data)}`);
+                    log(`❌ List participants failed: ${JSON.stringify(data)}`);
                 }
             } catch (error) {
-                log(`Error: ${error.message}`);
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        // ===== Get My Feeds (Optional - for debugging) =====
+        async function getMyFeeds() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/live/my-feeds/${roomId}`, {
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`📊 My Feeds: ${JSON.stringify(data.feeds, null, 2)}`);
+                    
+                    if (data.feeds && data.feeds.length > 0) {
+                        log(`✅ You have ${data.feeds.length} active feed(s):`);
+                        data.feeds.forEach(feed => {
+                            log(`   - ${feed.feedType}: Feed ID ${feed.feedId} (${feed.displayName})`);
+                        });
+                    } else {
+                        log(`ℹ️ You have no active feeds in this room`);
+                    }
+                } else {
+                    log(`❌ Get my feeds failed: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
             }
         }
 
@@ -868,16 +1023,15 @@
                 
                 if (startResponse.ok) {
                     log(`✅ Subscribed to ${displayName} successfully`);
-
-                    // Start keepalive for this feed's subscriber session
-                    startKeepalive(`subscriber-${feedId}`, subscribeData.sessionId);
                     
-                    // Store session for cleanup later
-                    state.subscriberSessions = state.subscriberSessions || {};
-                    state.subscriberSessions[feedId] = {
-                        sessionId: subscribeData.sessionId,
-                        handleId: subscribeData.handleId
-                    };
+                    // 🔥 Verify subscriber reuses main session
+                    if (state.mainSessionId && subscribeData.sessionId !== state.mainSessionId) {
+                        log(`⚠️ Warning: Subscriber session ${subscribeData.sessionId} differs from main ${state.mainSessionId}`);
+                    }
+                    state.mainSessionId = subscribeData.sessionId;  // Ensure we have it
+                    
+                    // Store handle for this feed
+                    state.subscriberHandles[feedId] = subscribeData.handleId;
                 } else {
                     log(`❌ Start subscriber failed`);
                 }
@@ -899,38 +1053,39 @@
             }
         }
 
-        // ===== Keepalive helpers =====
+        // ===== Keepalive helpers - ONE timer for main session =====
         async function sendKeepalive(sessionId) {
             try {
                 await fetch(`${API_BASE}/live/keepalive/${sessionId}`, {
                     method: 'POST',
                     headers: getHeaders()
                 });
-                log(`💓 Keepalive sent for session ${sessionId}`);
+                log(`💓 Keepalive sent for main session ${sessionId}`);
             } catch (e) {
-                log(`❌ Keepalive error for session ${sessionId}: ${e.message}`);
+                log(`❌ Keepalive error: ${e.message}`);
             }
         }
 
-        function startKeepalive(key, sessionId) {
-            stopKeepalive(key);
+        function startKeepalive(sessionId) {
+            stopKeepalive();
             if (!sessionId) return;
-            state.keepaliveTimers[key] = setInterval(() => sendKeepalive(sessionId), 30000);
-            log(`⏱️ Keepalive started for ${key} (session ${sessionId})`);
+            state.keepaliveTimer = setInterval(() => sendKeepalive(sessionId), 30000);
+            log(`⏱️ Keepalive started for main session ${sessionId}`);
         }
 
-        function stopKeepalive(key) {
-            if (state.keepaliveTimers[key]) {
-                clearInterval(state.keepaliveTimers[key]);
-                delete state.keepaliveTimers[key];
-                log(`🛑 Keepalive stopped for ${key}`);
+        function stopKeepalive() {
+            if (state.keepaliveTimer) {
+                clearInterval(state.keepaliveTimer);
+                state.keepaliveTimer = null;
+                log(`🛑 Keepalive stopped`);
             }
         }
 
         // Initial log
         log('🚀 Live Streaming Test Page Loaded');
         log('📝 Enter your access token and click "Save Tokens" to begin');
-        log('💡 Everyone joins as Publisher - you can stream or just watch others!');
+        log('💡 NEW ARCHITECTURE: 1 Session - Multiple Handles');
+        log('💡 Join room first → Then publish camera/screen → All use same session!');
     </script>
 </body>
 </html>
