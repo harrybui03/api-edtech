@@ -4,29 +4,38 @@ import com.example.backend.dto.request.live.*;
 import com.example.backend.dto.response.live.*;
 import com.example.backend.entity.Batch;
 import com.example.backend.entity.LiveSession;
+import com.example.backend.entity.ParticipantFeed;
+import com.example.backend.entity.ParticipantSession;
 import com.example.backend.entity.User;
 import com.example.backend.excecption.DataNotFoundException;
 import com.example.backend.excecption.ForbiddenException;
 import com.example.backend.mapper.LiveSessionMapper;
 import com.example.backend.repository.BatchRepository;
 import com.example.backend.repository.LiveSessionRepository;
+import com.example.backend.repository.ParticipantFeedRepository;
+import com.example.backend.repository.ParticipantSessionRepository;
 import com.example.backend.repository.UserRepository;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
+import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class LiveService {
     
     private final JanusService janusService;
@@ -34,6 +43,13 @@ public class LiveService {
     private final BatchRepository batchRepository;
     private final UserRepository userRepository;
     private final LiveSessionMapper liveSessionMapper;
+    private final RecordingService recordingService;
+    private final MinioClient minioClient;
+    private final ParticipantFeedRepository participantFeedRepository;
+    private final ParticipantSessionRepository participantSessionRepository;
+    
+    @Value("${minio.bucket.name}")
+    private String bucketName;
     
     private final Random random = new Random();
 
@@ -45,8 +61,6 @@ public class LiveService {
      */
     @Transactional
     public LiveSessionResponse startLive(StartLiveRequest request) {
-        log.info("Starting live for batch: {}", request.getBatchId());
-        
         // Get current user (instructor)
         User instructor = getCurrentUser();
         
@@ -105,6 +119,7 @@ public class LiveService {
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .startedAt(OffsetDateTime.now())
+                .recordingStatus(LiveSession.RecordingStatus.RECORDING)
                 .build();
         
         liveSession = liveSessionRepository.save(liveSession);
@@ -112,18 +127,16 @@ public class LiveService {
         // Start keepalive for the backend-managed publisher session
         startKeepalive(sessionId);
         
-        log.info("Live session started successfully with room ID: {}", roomId);
-        
         return liveSessionMapper.toResponse(liveSession);
     }
     
     /**
-     * Join live streaming
+     * Join live streaming - creates ONE main session per user in room
+     * This session will be reused for all feeds (camera, screen)
+     * User joins as publisher (can publish or just watch others)
      */
     @Transactional
     public JanusResponse joinLive(JoinLiveRequest request) {
-        log.info("Joining live room: {}", request.getRoomId());
-        
         User currentUser = getCurrentUser();
         
         // Validate live session exists
@@ -134,8 +147,18 @@ public class LiveService {
             throw new IllegalStateException("Live session is not published");
         }
         
-        // For simplicity, create a new session and handle for each participant
-        // In production, you might want to reuse sessions
+        // Check if user already has an active session in this room
+        Optional<ParticipantSession> existingSession = participantSessionRepository
+                .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId());
+        
+        if (existingSession.isPresent()) {
+            JanusResponse response = new JanusResponse();
+            response.setSessionId(existingSession.get().getJanusSessionId());
+            response.setJanus("success");
+            return response;
+        }
+        
+        // Create ONE main session for this user in this room
         JanusResponse sessionResponse = janusService.createSession();
         Long sessionId = sessionResponse.getData() != null 
                 ? ((Number) sessionResponse.getData().get("id")).longValue() 
@@ -145,6 +168,7 @@ public class LiveService {
             throw new RuntimeException("Failed to create Janus session");
         }
         
+        // 🔥 Attach plugin to get a handle for joining room
         JanusResponse attachResponse = janusService.attachPlugin(sessionId);
         Long handleId = attachResponse.getData() != null 
                 ? ((Number) attachResponse.getData().get("id")).longValue() 
@@ -154,39 +178,50 @@ public class LiveService {
             throw new RuntimeException("Failed to attach plugin");
         }
         
-        // Join room
-        // Use display name from request if provided, otherwise use user's full name
+        // 🔥 Join room as publisher (all users join as publisher)
         String displayName = (request.getDisplayName() != null && !request.getDisplayName().trim().isEmpty())
                 ? request.getDisplayName().trim()
                 : currentUser.getFullName();
+        
+        String ptype = (request.getPtype() != null && !request.getPtype().trim().isEmpty())
+                ? request.getPtype()
+                : "publisher";  // Default to publisher
         
         JanusResponse joinResponse = janusService.joinRoom(
                 sessionId, 
                 handleId, 
                 request.getRoomId(), 
-                request.getPtype(),
+                ptype,
                 displayName
         );
         
-        // Start keepalive for this session (both publisher and subscriber)
+        // Save participant session
+        ParticipantSession participantSession = ParticipantSession.builder()
+                .roomId(request.getRoomId())
+                .user(currentUser)
+                .janusSessionId(sessionId)
+                .isActive(true)
+                .build();
+        participantSessionRepository.save(participantSession);
+        
+        // Start keepalive for this main session
         startKeepalive(sessionId);
         
-        // Add sessionId and handleId to response for frontend to use in publish
+        // Return full response with sessionId and handleId
         joinResponse.setSessionId(sessionId);
         joinResponse.setHandleId(handleId);
-        
-        log.info("User {} joined room {} as {} (session: {}, handle: {})", 
-                currentUser.getFullName(), request.getRoomId(), request.getPtype(), sessionId, handleId);
         
         return joinResponse;
     }
     
     /**
      * Publish stream (camera/microphone)
+     * REUSES user's main session, creates new handle for camera
      */
+    @Transactional
     public PublishStreamResponse publishStream(PublishStreamRequest request) {
         String streamType = request.getStreamType() != null ? request.getStreamType() : "camera";
-        log.info("Publishing {} stream to room: {}", streamType, request.getRoomId());
+        User currentUser = getCurrentUser();
         
         // Validate live session exists
         LiveSession liveSession = liveSessionRepository.findByRoomId(request.getRoomId())
@@ -196,20 +231,73 @@ public class LiveService {
             throw new IllegalStateException("Live session is not published");
         }
         
-        // Use sessionId/handleId from request (from Join) if provided
-        // Otherwise use from liveSession (from Start Live - for instructor direct publish)
-        Long sessionId = request.getSessionId() != null 
-                ? request.getSessionId() 
-                : liveSession.getJanusSessionId();
-        Long handleId = request.getHandleId() != null 
-                ? request.getHandleId() 
-                : liveSession.getJanusHandleId();
+        // Check if user already has an active camera feed
+        Optional<ParticipantFeed> existingCameraFeed = participantFeedRepository.findAll().stream()
+                .filter(f -> f.getUser().getId().equals(currentUser.getId()) 
+                        && f.getRoomId().equals(request.getRoomId())
+                        && f.getFeedType() == ParticipantFeed.FeedType.CAMERA
+                        && f.getIsActive())
+                .findFirst();
         
-        log.info("Publishing with sessionId: {}, handleId: {}", sessionId, handleId);
+        if (existingCameraFeed.isPresent()) {
+            throw new IllegalStateException("User already has an active camera stream in this room. Please unpublish first.");
+        }
         
+        // 🔥 Get or create user's main session
+        ParticipantSession participantSession = participantSessionRepository
+                .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId())
+                .orElseGet(() -> {
+                    // Auto-create session if not exists
+                    JanusResponse sessionResponse = janusService.createSession();
+                    Long newSessionId = sessionResponse.getData() != null 
+                            ? ((Number) sessionResponse.getData().get("id")).longValue() 
+                            : null;
+                    
+                    if (newSessionId == null) {
+                        throw new RuntimeException("Failed to create Janus session");
+                    }
+                    
+                    ParticipantSession newSession = ParticipantSession.builder()
+                            .roomId(request.getRoomId())
+                            .user(currentUser)
+                            .janusSessionId(newSessionId)
+                            .isActive(true)
+                            .build();
+                    
+                    participantSessionRepository.save(newSession);
+                    startKeepalive(newSessionId);
+                    
+                    return newSession;
+                });
+        
+        Long sessionId = participantSession.getJanusSessionId();
+        
+        // 🔥 Create NEW handle for camera on existing session
+        JanusResponse attachResponse = janusService.attachPlugin(sessionId);
+        Long cameraHandleId = attachResponse.getData() != null 
+                ? ((Number) attachResponse.getData().get("id")).longValue() 
+                : null;
+        
+        if (cameraHandleId == null) {
+            throw new RuntimeException("Failed to attach plugin for camera");
+        }
+        
+        // Join room with camera handle
+        String displayName = currentUser.getFullName();
+        janusService.joinRoom(sessionId, cameraHandleId, request.getRoomId(), "publisher", displayName);
+        
+        // 🔥 Janus returns ACK immediately, then sends event with feedId asynchronously
+        // We need to poll listParticipants to get the actual feedId
+        Long cameraFeedId = pollForFeedId(request.getRoomId(), displayName, 5000); // 5 second timeout
+        
+        if (cameraFeedId == null) {
+            throw new RuntimeException("Failed to get feedId from Janus. The publisher may not have been added to the room.");
+        }
+        
+        // Publish stream
         JanusResponse janusResponse = janusService.publishStream(
                 sessionId, 
-                handleId, 
+                cameraHandleId, 
                 request.getSdp()
         );
         
@@ -221,11 +309,31 @@ public class LiveService {
             sdpAnswer = (String) janusResponse.getJsep().get("sdp");
         }
         
+        // If publish successful, save camera feed to database
+        if (sdpAnswer != null && janusResponse.getError() == null) {
+            // 🔥 Use feedId from join response (not from publish response!)
+            Long actualFeedId = cameraFeedId;
+            
+            // Save camera feed to database (active immediately after publish)
+            ParticipantFeed cameraFeed = ParticipantFeed.builder()
+                    .roomId(request.getRoomId())
+                    .user(currentUser)
+                    .feedId(actualFeedId)
+                    .feedType(ParticipantFeed.FeedType.CAMERA)
+                    .sessionId(sessionId)
+                    .handleId(cameraHandleId)
+                    .displayName(displayName)
+                    .isActive(true)
+                    .build();
+            
+            participantFeedRepository.save(cameraFeed);
+        }
+        
         return PublishStreamResponse.builder()
                 .sdpAnswer(sdpAnswer)
                 .type(type)
                 .sessionId(sessionId)
-                .handleId(handleId)
+                .handleId(cameraHandleId)
                 .error(janusResponse.getError())
                 .errorCode(janusResponse.getErrorCode())
                 .build();
@@ -233,10 +341,11 @@ public class LiveService {
     
     /**
      * Publish screen share stream
-     * Screen share cần session/handle riêng để có thể bật/tắt độc lập với camera
+     * REUSES user's main session, creates new handle for screen
      */
+    @Transactional
     public PublishStreamResponse publishScreenShare(PublishStreamRequest request) {
-        log.info("Publishing screen share stream to room: {}", request.getRoomId());
+        User currentUser = getCurrentUser();
         
         // Validate live session exists
         LiveSession liveSession = liveSessionRepository.findByRoomId(request.getRoomId())
@@ -246,18 +355,37 @@ public class LiveService {
             throw new IllegalStateException("Live session is not published");
         }
         
-        // Tạo session và handle riêng cho screen share
-        // Điều này cho phép bật/tắt screen share độc lập với camera stream
-        JanusResponse sessionResponse = janusService.createSession();
-        Long screenSessionId = sessionResponse.getData() != null 
-                ? ((Number) sessionResponse.getData().get("id")).longValue() 
-                : null;
+        // 🔥 Get or create user's main session
+        ParticipantSession participantSession = participantSessionRepository
+                .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId())
+                .orElseGet(() -> {
+                    // Auto-create session if not exists
+                    JanusResponse sessionResponse = janusService.createSession();
+                    Long newSessionId = sessionResponse.getData() != null 
+                            ? ((Number) sessionResponse.getData().get("id")).longValue() 
+                            : null;
+                    
+                    if (newSessionId == null) {
+                        throw new RuntimeException("Failed to create Janus session");
+                    }
+                    
+                    ParticipantSession newSession = ParticipantSession.builder()
+                            .roomId(request.getRoomId())
+                            .user(currentUser)
+                            .janusSessionId(newSessionId)
+                            .isActive(true)
+                            .build();
+                    
+                    participantSessionRepository.save(newSession);
+                    startKeepalive(newSessionId);
+                    
+                    return newSession;
+                });
         
-        if (screenSessionId == null) {
-            throw new RuntimeException("Failed to create Janus session for screen share");
-        }
+        Long sessionId = participantSession.getJanusSessionId();
         
-        JanusResponse attachResponse = janusService.attachPlugin(screenSessionId);
+        // 🔥 Create NEW handle for screen on existing session
+        JanusResponse attachResponse = janusService.attachPlugin(sessionId);
         Long screenHandleId = attachResponse.getData() != null 
                 ? ((Number) attachResponse.getData().get("id")).longValue() 
                 : null;
@@ -266,17 +394,21 @@ public class LiveService {
             throw new RuntimeException("Failed to attach plugin for screen share");
         }
         
-        // Join room với screen session/handle riêng
-        User currentUser = getCurrentUser();
+        // Join room with screen handle
         String displayName = currentUser.getFullName() + " (Screen)";
-        janusService.joinRoom(screenSessionId, screenHandleId, request.getRoomId(), "publisher", displayName);
+        janusService.joinRoom(sessionId, screenHandleId, request.getRoomId(), "publisher", displayName);
         
-        // Start keepalive for screen session
-        startKeepalive(screenSessionId);
+        // 🔥 Janus returns ACK immediately, then sends event with feedId asynchronously
+        // We need to poll listParticipants to get the actual feedId
+        Long screenFeedId = pollForFeedId(request.getRoomId(), displayName, 5000); // 5 second timeout
         
-        // Publish screen stream với session/handle riêng
+        if (screenFeedId == null) {
+            throw new RuntimeException("Failed to get feedId from Janus. The publisher may not have been added to the room.");
+        }
+        
+        // Publish screen stream
         JanusResponse janusResponse = janusService.publishStream(
-                screenSessionId, 
+                sessionId, 
                 screenHandleId, 
                 request.getSdp()
         );
@@ -289,13 +421,30 @@ public class LiveService {
             sdpAnswer = (String) janusResponse.getJsep().get("sdp");
         }
         
-        log.info("Screen share published with sessionId: {}, handleId: {} (keepalive started)", screenSessionId, screenHandleId);
+        // If publish successful, save screen feed to database
+        if (sdpAnswer != null && janusResponse.getError() == null) {
+            // 🔥 Use feedId from join response (not from publish response!)
+            Long actualFeedId = screenFeedId;
+            
+            // Save screen share feed to database (active after successful publish)
+            ParticipantFeed screenFeed = ParticipantFeed.builder()
+                    .roomId(request.getRoomId())
+                    .user(currentUser)
+                    .feedId(actualFeedId)
+                    .feedType(ParticipantFeed.FeedType.SCREEN)
+                    .sessionId(sessionId)
+                    .handleId(screenHandleId)
+                    .displayName(displayName)
+                    .isActive(true)
+                    .build();
+            participantFeedRepository.save(screenFeed);
+        }
         
         return PublishStreamResponse.builder()
                 .sdpAnswer(sdpAnswer)
                 .type(type)
-                .sessionId(screenSessionId) // Trả về sessionId riêng của screen
-                .handleId(screenHandleId)   // Trả về handleId riêng của screen
+                .sessionId(sessionId)
+                .handleId(screenHandleId)
                 .error(janusResponse.getError())
                 .errorCode(janusResponse.getErrorCode())
                 .build();
@@ -303,54 +452,81 @@ public class LiveService {
     
     /**
      * Unpublish stream (camera/microphone)
+     * Destroys ONLY the camera handle, keeps main session alive
      */
+    @Transactional
     public JanusResponse unpublishStream(Long roomId) {
-        log.info("Unpublishing camera stream from room: {}", roomId);
+        User currentUser = getCurrentUser();
         
         // Validate live session exists
-        LiveSession liveSession = liveSessionRepository.findByRoomId(roomId)
+        liveSessionRepository.findByRoomId(roomId)
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
         
-        return janusService.unpublishStream(
-                liveSession.getJanusSessionId(), 
-                liveSession.getJanusHandleId()
-        );
-    }
-    
-    /**
-     * Unpublish screen share stream
-     * Sử dụng session/handle riêng của screen để tắt độc lập
-     */
-    public JanusResponse unpublishScreenShare(UnpublishScreenRequest request) {
-        log.info("Unpublishing screen share from room: {}", request.getRoomId());
+        // Find camera feed from database
+        List<ParticipantFeed> userFeeds = participantFeedRepository
+                .findByUserAndRoomIdAndIsActiveTrue(currentUser, roomId);
         
-        // Validate live session exists
-        liveSessionRepository.findByRoomId(request.getRoomId())
-                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
+        ParticipantFeed cameraFeed = userFeeds.stream()
+                .filter(feed -> feed.getFeedType() == ParticipantFeed.FeedType.CAMERA)
+                .findFirst()
+                .orElseThrow(() -> new DataNotFoundException(
+                        "No active camera feed found for user " + currentUser.getFullName() + " in room " + roomId));
         
-        // Stop keepalive for screen session
-        stopKeepalive(request.getScreenSessionId());
+        Long sessionId = cameraFeed.getSessionId();
+        Long cameraHandleId = cameraFeed.getHandleId();
         
-        // Unpublish screen stream
-        JanusResponse unpublishResponse = janusService.unpublishStream(
-                request.getScreenSessionId(),
-                request.getScreenHandleId()
-        );
+        // Deactivate feed in database
+        participantFeedRepository.deactivateFeed(sessionId, cameraHandleId);
         
-        // Destroy screen session
-        janusService.destroySession(request.getScreenSessionId());
+        // Unpublish from Janus
+        JanusResponse unpublishResponse = janusService.unpublishStream(sessionId, cameraHandleId);
         
-        log.info("Screen share unpublished, session destroyed, keepalive stopped");
-        
+        // 🔥 Do NOT destroy session - keep it alive for other feeds (screen, etc.)
+        // Session will be destroyed when user leaves room or is kicked
         return unpublishResponse;
     }
     
     /**
-     * Kick participant
+     * Unpublish screen share stream
+     * Destroys ONLY the screen handle, keeps main session alive
      */
-    public JanusResponse kickParticipant(KickParticipantRequest request) {
-        log.info("Kicking participant {} from room {}", request.getParticipantId(), request.getRoomId());
+    @Transactional
+    public JanusResponse unpublishScreenShare(Long roomId) {
+        User currentUser = getCurrentUser();
         
+        // Validate live session exists
+        liveSessionRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
+        
+        // Find screen feed from database
+        List<ParticipantFeed> userFeeds = participantFeedRepository
+                .findByUserAndRoomIdAndIsActiveTrue(currentUser, roomId);
+        
+        ParticipantFeed screenFeed = userFeeds.stream()
+                .filter(feed -> feed.getFeedType() == ParticipantFeed.FeedType.SCREEN)
+                .findFirst()
+                .orElseThrow(() -> new DataNotFoundException(
+                        "No active screen feed found for user " + currentUser.getFullName() + " in room " + roomId));
+        
+        Long sessionId = screenFeed.getSessionId();
+        Long screenHandleId = screenFeed.getHandleId();
+        
+        // Deactivate screen feed in database
+        participantFeedRepository.deactivateFeed(sessionId, screenHandleId);
+        
+        // Unpublish screen stream
+        JanusResponse unpublishResponse = janusService.unpublishStream(sessionId, screenHandleId);
+        
+        // 🔥 Do NOT destroy session - keep it alive for other feeds (camera, etc.)
+        // Session will be destroyed when user leaves room or is kicked
+        return unpublishResponse;
+    }
+    
+    /**
+     * Kick participant - destroys their main session which disconnects ALL their feeds (camera, screen)
+     */
+    @Transactional
+    public JanusResponse kickParticipant(KickParticipantRequest request) {
         User instructor = getCurrentUser();
         
         // Validate live session exists
@@ -362,56 +538,139 @@ public class LiveService {
             throw new ForbiddenException("Only the instructor who started the session can kick participants");
         }
         
-        return janusService.kickParticipant(
+        // 🔥 Find the user being kicked by their feed ID
+        // The participantId in the request is actually a feed ID from Janus
+        ParticipantFeed kickedFeed = participantFeedRepository.findByFeedIdAndRoomId(
+                request.getParticipantId(), 
+                request.getRoomId()
+        ).orElseThrow(() -> new DataNotFoundException(
+                "Feed not found with ID: " + request.getParticipantId() + " in room " + request.getRoomId()));
+        
+        User kickedUser = kickedFeed.getUser();
+        
+        // 🔥 Find and destroy user's main session
+        ParticipantSession userSession = participantSessionRepository
+                .findByUserAndRoomIdAndIsActiveTrue(kickedUser, request.getRoomId())
+                .orElse(null);
+        
+        if (userSession != null) {
+            Long sessionId = userSession.getJanusSessionId();
+            
+            // Stop keepalive first
+            stopKeepalive(sessionId);
+            
+            // Destroy the Janus session - this will disconnect ALL handles (camera, screen, etc.)
+            try {
+                janusService.destroySession(sessionId);
+            } catch (Exception e) {
+                // Session destruction failed
+            }
+            
+            // Deactivate session in database
+            participantSessionRepository.deactivateByJanusSessionId(sessionId);
+            
+            // Deactivate ALL feeds for this user in this room
+            participantFeedRepository.deactivateUserFeedsInRoom(
+                    kickedUser.getId(), 
+                    request.getRoomId()
+            );
+        }
+        
+        // Also call Janus kick API (may not be needed since we destroyed session, but for safety)
+        JanusResponse kickResponse = janusService.kickParticipant(
                 liveSession.getJanusSessionId(),
                 liveSession.getJanusHandleId(),
                 request.getRoomId(),
                 request.getParticipantId()
         );
+        
+        return kickResponse;
     }
     
     /**
      * List participants (publishers) in room
      * Subscriber dùng để lấy danh sách publishers và feed IDs
+     * Automatically excludes current user's own feeds
      */
-    public ParticipantListResponse listParticipants(Long roomId) {
-        log.info("Listing participants in room: {}", roomId);
+    public ParticipantListResponse listParticipants(Long roomId, Long excludeFeedId) {
+        User currentUser = getCurrentUser();
         
         // Validate live session exists
         LiveSession liveSession = liveSessionRepository.findByRoomId(roomId)
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
         
-        return janusService.listParticipants(
+        ParticipantListResponse response = janusService.listParticipants(
                 liveSession.getJanusSessionId(),
                 liveSession.getJanusHandleId(),
                 roomId
         );
+        
+        // Get all active feed IDs for current user in this room
+        List<Long> myFeedIds = participantFeedRepository.findActiveFeedIdsByUserAndRoom(
+                currentUser.getId(), 
+                roomId
+        );
+        
+        // Add manual excludeFeedId if provided (for backward compatibility)
+        if (excludeFeedId != null && !myFeedIds.contains(excludeFeedId)) {
+            myFeedIds.add(excludeFeedId);
+        }
+        
+        // Filter out ALL feeds from current user
+        if (!myFeedIds.isEmpty() && response.getParticipants() != null) {
+            List<ParticipantListResponse.Participant> filteredParticipants = response.getParticipants().stream()
+                    .filter(p -> !myFeedIds.contains(p.getId()))
+                    .toList();
+            response.setParticipants(filteredParticipants);
+        }
+        
+        return response;
     }
     
     /**
      * Subscribe to a publisher's stream
-     * Step 1: Create new handle for this specific feed and get SDP offer
+     * REUSES user's main session, creates new handle for subscribing to this feed
      * 
      * Note: Mỗi feed cần 1 handle riêng theo Janus VideoRoom design
      */
+    @Transactional
     public SubscribeResponse subscribe(SubscribeRequest request) {
-        log.info("Subscribing to feed {} in room {}", request.getFeedId(), request.getRoomId());
+        User currentUser = getCurrentUser();
         
         // Validate live session exists
         liveSessionRepository.findByRoomId(request.getRoomId())
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        // Create new session and handle for this specific feed
-        // (Janus VideoRoom requires separate handle per subscribed feed)
-        JanusResponse sessionResponse = janusService.createSession();
-        Long sessionId = sessionResponse.getData() != null 
-                ? ((Number) sessionResponse.getData().get("id")).longValue() 
-                : null;
+        // 🔥 Get or create user's main session (reuse architecture!)
+        ParticipantSession participantSession = participantSessionRepository
+                .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId())
+                .orElseGet(() -> {
+                    // Auto-create session if not exists (user didn't join first)
+                    JanusResponse sessionResponse = janusService.createSession();
+                    Long newSessionId = sessionResponse.getData() != null 
+                            ? ((Number) sessionResponse.getData().get("id")).longValue() 
+                            : null;
+                    
+                    if (newSessionId == null) {
+                        throw new RuntimeException("Failed to create Janus session");
+                    }
+                    
+                    ParticipantSession newSession = ParticipantSession.builder()
+                            .roomId(request.getRoomId())
+                            .user(currentUser)
+                            .janusSessionId(newSessionId)
+                            .isActive(true)
+                            .build();
+                    
+                    participantSessionRepository.save(newSession);
+                    startKeepalive(newSessionId);
+                    
+                    return newSession;
+                });
         
-        if (sessionId == null) {
-            throw new RuntimeException("Failed to create Janus session for subscriber");
-        }
+        Long sessionId = participantSession.getJanusSessionId();
         
+        // 🔥 Create new handle for subscribing to this feed (on existing session)
         JanusResponse attachResponse = janusService.attachPlugin(sessionId);
         Long handleId = attachResponse.getData() != null 
                 ? ((Number) attachResponse.getData().get("id")).longValue() 
@@ -421,16 +680,11 @@ public class LiveService {
             throw new RuntimeException("Failed to attach plugin for subscriber");
         }
         
-        // Start keepalive for this subscriber session
-        startKeepalive(sessionId);
-        
-        log.info("Created subscriber session: {}, handle: {} for feed: {}", sessionId, handleId, request.getFeedId());
-        
         // Join as subscriber with feed - Janus sẽ trả về SDP offer
         JanusResponse configureResponse = janusService.configureSubscriber(
                 sessionId,
                 handleId,
-                request.getRoomId(),  // Pass room ID
+                request.getRoomId(),
                 request.getFeedId()
         );
         
@@ -445,8 +699,8 @@ public class LiveService {
         return SubscribeResponse.builder()
                 .sdpOffer(sdpOffer)
                 .type(type)
-                .sessionId(sessionId)  // Return new session
-                .handleId(handleId)    // Return new handle
+                .sessionId(sessionId)  // Return main session (same for all!)
+                .handleId(handleId)    // Return new handle for this feed
                 .feedId(request.getFeedId())
                 .error(configureResponse.getError())
                 .errorCode(configureResponse.getErrorCode())
@@ -458,8 +712,6 @@ public class LiveService {
      * Step 2: Gửi SDP answer để bắt đầu nhận stream
      */
     public JanusResponse startSubscriber(StartSubscriberRequest request) {
-        log.info("Starting subscriber with SDP answer");
-        
         return janusService.startSubscriber(request.getSessionId(), request.getHandleId(), request.getSdpAnswer());
     }
 
@@ -467,36 +719,54 @@ public class LiveService {
      * Send keepalive for a given Janus session
      */
     public JanusResponse keepAlive(Long sessionId) {
-        log.info("Keepalive for session {}", sessionId);
         return janusService.keepAlive(sessionId);
     }
     
     /**
      * Leave room (for participants to clean up their session)
+     * Destroys main session which disconnects all feeds
      */
-    public void leaveRoom(Long sessionId) {
-        log.info("Participant leaving room, cleaning up session: {}", sessionId);
+    @Transactional
+    public void leaveRoom(Long roomId) {
+        User currentUser = getCurrentUser();
+        
+        // Find user's main session in this room
+        ParticipantSession userSession = participantSessionRepository
+                .findByUserAndRoomIdAndIsActiveTrue(currentUser, roomId)
+                .orElse(null);
+        
+        if (userSession == null) {
+            return;
+        }
+        
+        Long sessionId = userSession.getJanusSessionId();
         
         // Stop keepalive for this session
         stopKeepalive(sessionId);
         
-        // Destroy session in Janus
+        // Destroy session in Janus - this disconnects ALL handles (camera, screen)
         try {
             janusService.destroySession(sessionId);
         } catch (Exception e) {
-            log.warn("Failed to destroy session {} in Janus: {}", sessionId, e.getMessage());
+            // Session destruction failed
         }
         
-        log.info("Participant left room successfully");
+        // Deactivate session in database
+        participantSessionRepository.deactivateByJanusSessionId(sessionId);
+        
+        // Deactivate ALL feeds for this user in this room
+        participantFeedRepository.deactivateUserFeedsInRoom(
+                currentUser.getId(), 
+                roomId
+        );
     }
     
     /**
      * End live streaming
+     * Destroys all participant sessions and deactivates all feeds
      */
     @Transactional
     public LiveSessionResponse endLive(Long roomId) {
-        log.info("Ending live session for room: {}", roomId);
-        
         User instructor = getCurrentUser();
         
         // Validate live session exists
@@ -512,6 +782,27 @@ public class LiveService {
             throw new IllegalStateException("Live session is not published");
         }
         
+        // 🔥 Destroy ALL participant sessions in this room
+        List<ParticipantSession> activeSessions = participantSessionRepository
+                .findByRoomIdAndIsActiveTrue(roomId);
+        
+        for (ParticipantSession session : activeSessions) {
+            Long sessionId = session.getJanusSessionId();
+            
+            try {
+                // Stop keepalive
+                stopKeepalive(sessionId);
+                
+                // Destroy session in Janus
+                janusService.destroySession(sessionId);
+            } catch (Exception e) {
+                // Session destruction failed
+            }
+        }
+        
+        // Deactivate all participant sessions in database
+        participantSessionRepository.deactivateAllSessionsInRoom(roomId);
+        
         // Destroy room in Janus
         janusService.destroyRoom(
                 liveSession.getJanusSessionId(),
@@ -519,35 +810,151 @@ public class LiveService {
                 roomId
         );
         
-        // Destroy session in Janus
+        // Destroy instructor's main session in Janus
         janusService.destroySession(liveSession.getJanusSessionId());
         
-        // Stop keepalive timer for main session
+        // Stop keepalive timer for instructor's main session
         stopKeepalive(liveSession.getJanusSessionId());
         
-        // Stop all keepalive timers (for all participants)
+        // Stop all keepalive timers (cleanup any remaining)
         stopAllKeepalives();
+        
+        // Deactivate all participant feeds in this room
+        participantFeedRepository.deactivateAllFeedsInRoom(roomId);
 
         // Update session status
         liveSession.setStatus(LiveSession.LiveStatus.ENDED);
         liveSession.setEndedAt(OffsetDateTime.now());
         liveSession = liveSessionRepository.save(liveSession);
         
-        log.info("Live session ended successfully");
+        // Trigger recording processing asynchronously
+        recordingService.processRecording(liveSession.getId());
         
         return liveSessionMapper.toResponse(liveSession);
+    }
+    
+    /**
+     * Get my feeds in a room
+     */
+    public MyFeedsResponse getMyFeeds(Long roomId) {
+        User currentUser = getCurrentUser();
+        
+        // Validate live session exists
+        liveSessionRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
+        
+        // Get all active feeds for current user
+        List<ParticipantFeed> feeds = participantFeedRepository.findByUserAndRoomIdAndIsActiveTrue(
+                currentUser, 
+                roomId
+        );
+        
+        List<MyFeedsResponse.FeedInfo> feedInfos = feeds.stream()
+                .map(feed -> MyFeedsResponse.FeedInfo.builder()
+                        .feedId(feed.getFeedId())
+                        .feedType(feed.getFeedType())
+                        .displayName(feed.getDisplayName())
+                        .isActive(feed.getIsActive())
+                        .sessionId(feed.getSessionId())
+                        .handleId(feed.getHandleId())
+                        .build())
+                .toList();
+        
+        return MyFeedsResponse.builder()
+                .roomId(roomId)
+                .feeds(feedInfos)
+                .build();
     }
     
     /**
      * Get live session info
      */
     public LiveSessionResponse getLiveSession(Long roomId) {
-        log.info("Getting live session info for room: {}", roomId);
-        
         LiveSession liveSession = liveSessionRepository.findByRoomId(roomId)
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
         
         return liveSessionMapper.toResponse(liveSession);
+    }
+    
+    /**
+     * Get recording for a live session
+     */
+    public RecordingResponse getRecording(Long roomId) {
+        LiveSession liveSession = liveSessionRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
+        
+        LiveSession.RecordingStatus status = liveSession.getRecordingStatus();
+        
+        // If no recording status, default to NOT_STARTED
+        if (status == null) {
+            status = LiveSession.RecordingStatus.NOT_STARTED;
+        }
+        
+        RecordingResponse.RecordingResponseBuilder responseBuilder = RecordingResponse.builder()
+                .roomId(roomId)
+                .status(status)
+                .duration(liveSession.getRecordingDuration());
+        
+        // Handle different statuses
+        switch (status) {
+            case NOT_STARTED:
+                return responseBuilder
+                        .message("Recording was not started for this live session")
+                        .build();
+                
+            case RECORDING:
+                return responseBuilder
+                        .message("Live session is currently recording")
+                        .build();
+                
+            case PROCESSING:
+                return responseBuilder
+                        .message("Recording is being processed. Please check back later.")
+                        .build();
+                
+            case FAILED:
+                return responseBuilder
+                        .message("Recording processing failed. Please contact support.")
+                        .build();
+                
+            case COMPLETED:
+                // Generate presigned URL for the recording
+                String objectName = liveSession.getRecordingObjectName();
+                
+                if (objectName == null || objectName.isEmpty()) {
+                    return responseBuilder
+                            .status(LiveSession.RecordingStatus.FAILED)
+                            .message("Recording file path not found")
+                            .build();
+                }
+                
+                try {
+                    String presignedUrl = minioClient.getPresignedObjectUrl(
+                        GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(bucketName)
+                            .object(objectName)
+                            .expiry(2, TimeUnit.HOURS)
+                            .build()
+                    );
+                    
+                    return responseBuilder
+                            .recordingUrl(presignedUrl)
+                            .message("Recording is ready")
+                            .build();
+                    
+                } catch (Exception e) {
+                    return responseBuilder
+                            .status(LiveSession.RecordingStatus.FAILED)
+                            .message("Error generating recording URL: " + e.getMessage())
+                            .build();
+                }
+                
+            default:
+                return responseBuilder
+                        .message("Unknown recording status")
+                        .build();
+        }
     }
     
     private Long generateRoomId() {
@@ -559,7 +966,63 @@ public class LiveService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new DataNotFoundException("User not found with email: " + email));
     }
+    
 
+    /**
+     * Poll Janus listParticipants to get feedId for a newly joined publisher
+     * Janus sends feedId asynchronously in an event after join ACK
+     * We poll the participant list to find the feedId by matching display name
+     * 
+     * @param roomId The room ID
+     * @param displayName The display name of the publisher to find
+     * @param timeoutMs Maximum time to wait in milliseconds
+     * @return The feedId if found, null otherwise
+     */
+    private Long pollForFeedId(Long roomId, String displayName, long timeoutMs) {
+        long startTime = System.currentTimeMillis();
+        int pollIntervalMs = 200; // Poll every 200ms
+        int attemptCount = 0;
+        
+        // Get live session for this room
+        LiveSession liveSession = liveSessionRepository.findByRoomId(roomId).orElse(null);
+        if (liveSession == null) {
+            return null;
+        }
+        
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            attemptCount++;
+            
+            try {
+                // Query Janus for list of participants
+                ParticipantListResponse participantList = janusService.listParticipants(
+                        liveSession.getJanusSessionId(),
+                        liveSession.getJanusHandleId(),
+                        roomId
+                );
+                
+                if (participantList.getParticipants() != null) {
+                    // Look for participant with matching display name
+                    for (ParticipantListResponse.Participant p : participantList.getParticipants()) {
+                        if (displayName.equals(p.getDisplay())) {
+                            return p.getId();
+                        }
+                    }
+                }
+                
+                // Wait before next poll
+                Thread.sleep(pollIntervalMs);
+                
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (Exception e) {
+                // Continue polling despite error
+            }
+        }
+        
+        return null;
+    }
+    
     private void startKeepalive(Long sessionId) {
         stopKeepalive(sessionId); // ensure previous timer cleared
         Timer timer = new Timer("janus-keepalive-" + sessionId, true);
@@ -568,9 +1031,8 @@ public class LiveService {
             public void run() {
                 try {
                     janusService.keepAlive(sessionId);
-                    log.debug("Keepalive sent for session {}", sessionId);
                 } catch (Exception ex) {
-                    log.warn("Keepalive failed for session {}: {}", sessionId, ex.getMessage());
+                    // Keepalive failed
                 }
             }
         }, 30000L, 30000L); // start after 30s, repeat every 30s
@@ -581,17 +1043,12 @@ public class LiveService {
         Timer t = sessionKeepaliveTimers.remove(sessionId);
         if (t != null) {
             t.cancel();
-            log.debug("Keepalive stopped for session {}", sessionId);
         }
     }
 
     private void stopAllKeepalives() {
-        sessionKeepaliveTimers.forEach((sessionId, timer) -> {
-            timer.cancel();
-            log.debug("Keepalive stopped for session {}", sessionId);
-        });
+        sessionKeepaliveTimers.forEach((sessionId, timer) -> timer.cancel());
         sessionKeepaliveTimers.clear();
-        log.info("All keepalive timers stopped");
     }
 }
 

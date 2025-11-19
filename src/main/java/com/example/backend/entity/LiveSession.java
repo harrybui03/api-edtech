@@ -56,6 +56,16 @@ public class LiveSession {
     @Column(name = "ended_at")
     private OffsetDateTime endedAt;
     
+    @Column(name = "recording_object_name", length = 500)
+    private String recordingObjectName;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "recording_status", length = 20)
+    private RecordingStatus recordingStatus;
+    
+    @Column(name = "recording_duration")
+    private Integer recordingDuration;
+    
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;
@@ -67,6 +77,14 @@ public class LiveSession {
     public enum LiveStatus {
         PUBLISHED,
         ENDED
+    }
+    
+    public enum RecordingStatus {
+        NOT_STARTED,
+        RECORDING,
+        PROCESSING,
+        COMPLETED,
+        FAILED
     }
 }
 
