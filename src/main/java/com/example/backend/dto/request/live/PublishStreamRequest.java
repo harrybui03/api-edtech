@@ -22,16 +22,7 @@ public class PublishStreamRequest {
      */
     private String streamType;
     
-    /**
-     * Session ID from Join (optional)
-     * If not provided, will use session from Start Live (for instructor direct publish)
-     */
-    private Long sessionId;
-    
-    /**
-     * Handle ID from Join (optional)
-     * If not provided, will use handle from Start Live (for instructor direct publish)
-     */
-    private Long handleId;
+    // sessionId and handleId are auto-detected by backend from database
+    // No need for frontend to send them!
 }
 
