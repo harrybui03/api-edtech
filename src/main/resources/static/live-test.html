@@ -147,6 +147,41 @@
             </p>
         </div>
 
+        <!-- Recording Controls (Instructor) -->
+        <div class="section">
+            <h3>🎬 Recording Controls (Instructor)</h3>
+            <div class="alert alert-info">
+                <strong>📝 How it works:</strong> Records your screen + mic + system audio → Creates 30-second chunks → Auto-uploads to backend → Backend merges & transcodes
+            </div>
+            <div class="controls">
+                <button onclick="startRecording()" id="startRecBtn" class="btn btn-danger btn-lg">🔴 Start Recording</button>
+                <button onclick="stopRecording()" id="stopRecBtn" class="btn btn-warning btn-lg" disabled>⏹️ Stop Recording</button>
+                <button onclick="checkRecordingStatus()" class="btn btn-info">📊 Check Status</button>
+            </div>
+            <div class="mt-3">
+                <div class="row">
+                    <div class="col-md-3">
+                        <small>Status: <span id="recStatus" class="badge bg-secondary">Not Started</span></small>
+                    </div>
+                    <div class="col-md-3">
+                        <small>Duration: <strong id="recDuration">00:00</strong></small>
+                    </div>
+                    <div class="col-md-3">
+                        <small>Chunks: <strong id="recChunks">0</strong></small>
+                    </div>
+                    <div class="col-md-3">
+                        <small>Last Upload: <span id="recLastUpload">-</span></small>
+                    </div>
+                </div>
+            </div>
+            <div id="recordingProgress" class="mt-3" style="display:none;">
+                <div class="progress">
+                    <div id="uploadProgress" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">Uploading...</div>
+                </div>
+            </div>
+            <div id="recordingResult" class="mt-3"></div>
+        </div>
+
         <!-- Watch Others -->
         <div class="section">
             <h3>👀 Watch Others</h3>
@@ -192,7 +227,27 @@
             publishers: [],
             keepaliveTimer: null,  // 🔥 ONE keepalive timer for main session
             micMuted: false,
-            localStream: null
+            localStream: null,
+            // Recording state
+            recording: {
+                mediaRecorder: null,
+                combinedStream: null,
+                chunkIndex: 0,
+                isRecording: false,
+                isStopping: false, // Flag to prevent restart on stop
+                startTime: null,
+                durationTimer: null,
+                chunkTimer: null, // Timer for stop/restart every 30s
+                totalDurationSeconds: 0,
+                uploadedChunks: 0,
+                screenStream: null,
+                micStream: null,
+                audioContext: null,
+                roomId: null,
+                isCompleting: false, // Flag to prevent duplicate complete API calls
+                recordingOptions: null, // Store MediaRecorder options for restart
+                recordingStream: null // Store stream for restart
+            }
         };
 
         // ===== Authentication =====
@@ -1081,11 +1136,628 @@
             }
         }
 
+        // ==================== RECORDING FUNCTIONS ====================
+        
+        /**
+         * Start Recording - Merge screen + mic + system audio
+         * ⭐ SIMPLIFIED VERSION: Uses timeslice for automatic chunking (30s)
+         */
+        async function startRecording() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID first');
+                return;
+            }
+            
+            try {
+                log('🎬 Starting recording...');
+                updateRecStatus('Initializing...', 'warning');
+                
+                // 1. Get screen stream with system audio
+                log('📺 Requesting screen share with audio...');
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { 
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: true // System audio
+                });
+                
+                state.recording.screenStream = screenStream;
+                
+                // Handle when user stops sharing via browser button
+                screenStream.getVideoTracks()[0].onended = () => {
+                    log('⚠️ Screen sharing stopped by user');
+                    stopRecording();
+                };
+                
+                // 2. Get microphone stream
+                log('🎤 Requesting microphone access...');
+                const micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                state.recording.micStream = micStream;
+                
+                // 3. Merge audio tracks using Web Audio API
+                log('🎵 Merging audio tracks...');
+                const audioContext = new AudioContext();
+                state.recording.audioContext = audioContext;
+                
+                const destination = audioContext.createMediaStreamDestination();
+                
+                // Add screen audio if available
+                const screenAudioTracks = screenStream.getAudioTracks();
+                if (screenAudioTracks.length > 0) {
+                    const screenAudioSource = audioContext.createMediaStreamSource(
+                        new MediaStream(screenAudioTracks)
+                    );
+                    screenAudioSource.connect(destination);
+                    log('✅ System audio added');
+                } else {
+                    log('⚠️ No system audio in screen share');
+                }
+                
+                // Add microphone audio
+                const micAudioSource = audioContext.createMediaStreamSource(micStream);
+                micAudioSource.connect(destination);
+                log('✅ Microphone added');
+                
+                // 4. Create combined stream: screen video + merged audio
+                const combinedStream = new MediaStream([
+                    ...screenStream.getVideoTracks(),
+                    ...destination.stream.getAudioTracks()
+                ]);
+                
+                state.recording.combinedStream = combinedStream;
+                log(`✅ Combined stream created: ${combinedStream.getTracks().length} tracks`);
+                
+                // 5. Setup MediaRecorder with WebM format
+                // ⭐ USE VP8 instead of VP9 for better chunk stability
+                // VP8 creates chunks with complete headers, VP9 metadata is distributed → chunks after first may be corrupted
+                const options = {
+                    mimeType: 'video/webm;codecs=vp8,opus',
+                    videoBitsPerSecond: 2500000, // 2.5 Mbps
+                    audioBitsPerSecond: 128000  // 128 kbps for audio
+                };
+                
+                // Verify codec support
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    throw new Error(`MediaRecorder does not support ${options.mimeType}`);
+                }
+                
+                log('✅ Using VP8 codec for stable chunk recording');
+                
+                // 6. Store options and stream for restart
+                state.recording.recordingOptions = options;
+                state.recording.recordingStream = combinedStream;
+                
+                // 7. Function to create and setup MediaRecorder
+                function createMediaRecorder() {
+                    // Use stored stream and options for restart capability
+                    const stream = state.recording.recordingStream || combinedStream;
+                    const opts = state.recording.recordingOptions || options;
+                    const mr = new MediaRecorder(stream, opts);
+                    
+                    mr.ondataavailable = async (event) => {
+                        if (!event.data || event.data.size < 1000) {
+                            log(`⚠️ Chunk ${state.recording.chunkIndex} has no data or size is 0, skipping...`);
+                            return;
+                        }
+                        
+                        const blob = event.data;
+                        const currentChunkIndex = state.recording.chunkIndex;
+                        const duration = 30; // Each chunk is exactly 30s
+                        
+                        log(`📦 Chunk ${currentChunkIndex} ready (${(blob.size / 1024 / 1024).toFixed(2)} MB, ~30s)`);
+                        
+                        // Upload chunk immediately
+                        try {
+                            await uploadChunk(roomId, currentChunkIndex, blob, duration);
+                            // CRITICAL: Only increment chunkIndex AFTER successful upload
+                            state.recording.chunkIndex++;
+                            state.recording.uploadedChunks++;
+                            log(`✅ Chunk ${currentChunkIndex} uploaded successfully (total: ${state.recording.uploadedChunks})`);
+                        } catch (error) {
+                            log(`❌ Failed to upload chunk ${currentChunkIndex}: ${error.message}`);
+                            // Don't increment chunkIndex on failure
+                            // Continue recording even if one chunk fails
+                        }
+                    };
+                    
+                    mr.onerror = (event) => {
+                        log(`❌ MediaRecorder error: ${event.error}`);
+                        updateRecStatus('Error', 'danger');
+                    };
+                    
+                    mr.onstop = async () => {
+                        log(`🛑 MediaRecorder stopped (chunk ${state.recording.chunkIndex} complete)`);
+                        
+                        // CRITICAL: Check if we're stopping - don't restart if user clicked stop
+                        if (state.recording.isStopping || !state.recording.isRecording) {
+                            log('🛑 Recording is stopping, NOT restarting MediaRecorder');
+                            return; // Exit early - don't restart
+                        }
+                        
+                        // Wait a bit for final data
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        // Double check: Restart recording ONLY if still active and NOT stopping
+                        if (state.recording.isRecording && !state.recording.isStopping) {
+                            log(`🔄 Restarting MediaRecorder for next chunk...`);
+                            
+                            try {
+                                // Create new MediaRecorder to ensure clean state
+                                const newMediaRecorder = createMediaRecorder();
+                                state.recording.mediaRecorder = newMediaRecorder;
+                                newMediaRecorder.start(); // Start without timeslice - creates complete WebM file
+                                
+                                log(`✅ MediaRecorder restarted for chunk ${state.recording.chunkIndex}`);
+                            } catch (error) {
+                                log(`❌ Failed to restart MediaRecorder: ${error.message}`);
+                                stopRecording();
+                            }
+                        } else {
+                            log('⚠️ Not restarting: isRecording=' + state.recording.isRecording + ', isStopping=' + state.recording.isStopping);
+                        }
+                    };
+                    
+                    return mr;
+                }
+                
+                // 8. Create initial MediaRecorder
+                const mediaRecorder = createMediaRecorder();
+                state.recording.mediaRecorder = mediaRecorder;
+                
+                // 9. Start recording WITHOUT timeslice - creates complete WebM file
+                mediaRecorder.start(); // No timeslice - creates complete WebM file
+                log(`✅ MediaRecorder started (will stop/restart every 30s for complete chunks)`);
+                
+                // 10. Set timer to stop/restart every 30 seconds
+                state.recording.chunkTimer = setInterval(() => {
+                    if (state.recording.isRecording && state.recording.mediaRecorder && !state.recording.isStopping) {
+                        const mrState = state.recording.mediaRecorder.state;
+                        if (mrState === 'recording') {
+                            log(`⏰ 30s elapsed, stopping MediaRecorder to create complete chunk...`);
+                            state.recording.mediaRecorder.stop(); // This will trigger onstop and restart
+                        } else {
+                            log(`⚠️ MediaRecorder state is ${mrState}, not stopping`);
+                        }
+                    }
+                }, 30000); // 30 seconds
+                
+                // Initialize state
+                state.recording.isRecording = true;
+                state.recording.isStopping = false; // Flag to prevent restart on stop
+                state.recording.startTime = Date.now();
+                state.recording.chunkIndex = 0;
+                state.recording.uploadedChunks = 0;
+                state.recording.roomId = roomId;
+                state.recording.isCompleting = false; // Reset flag
+                
+                // Update UI
+                document.getElementById('startRecBtn').disabled = true;
+                document.getElementById('stopRecBtn').disabled = false;
+                updateRecStatus('Recording...', 'danger');
+                
+                // Start duration timer
+                startDurationTimer();
+                
+                log('✅ Recording started! MediaRecorder will stop/restart every 30s');
+                log('💡 Each chunk is a complete WebM file with header - can play independently');
+                log('💡 Keep this tab active for best recording quality');
+                
+            } catch (error) {
+                log(`❌ Failed to start recording: ${error.message}`);
+                updateRecStatus('Failed', 'danger');
+                alert(`Failed to start recording: ${error.message}\n\nMake sure you:\n1. Allow screen sharing\n2. Allow microphone access\n3. Check "Share audio" in screen share dialog`);
+                cleanupRecording();
+            }
+        }
+        
+        /**
+         * Stop Recording
+         * ⭐ SIMPLIFIED VERSION: Stop recorder → wait for final chunk → call complete API
+         */
+        async function stopRecording() {
+            if (!state.recording.isRecording) {
+                alert('Recording not started');
+                return;
+            }
+            
+            // Prevent duplicate calls
+            if (state.recording.isCompleting) {
+                log('⚠️ Already completing recording, ignoring duplicate call');
+                return;
+            }
+            
+            try {
+                log('🛑 Stopping recording...');
+                updateRecStatus('Stopping...', 'warning');
+                
+                // Set flags
+                state.recording.isStopping = true; // Prevent restart in onstop
+                state.recording.isRecording = false;
+                state.recording.isCompleting = true; // Prevent duplicate complete API calls
+                
+                // Stop chunk timer FIRST to prevent timer from triggering
+                if (state.recording.chunkTimer) {
+                    clearInterval(state.recording.chunkTimer);
+                    state.recording.chunkTimer = null;
+                    log('⏰ Chunk timer stopped');
+                }
+                
+                // Wait a bit to ensure timer callback doesn't fire
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Stop MediaRecorder - will fire ondataavailable with final chunk
+                if (state.recording.mediaRecorder && state.recording.mediaRecorder.state !== 'inactive') {
+                    log('📤 Stopping MediaRecorder (will trigger final chunk)...');
+                    state.recording.mediaRecorder.stop();
+                }
+                
+                // Wait for final chunk to be uploaded (ondataavailable will handle it)
+                log('⏳ Waiting for final chunk to be uploaded...');
+                await waitForFinalChunk();
+                
+                // Calculate total duration
+                const totalDurationSeconds = Math.floor((Date.now() - state.recording.startTime) / 1000);
+                state.recording.totalDurationSeconds = totalDurationSeconds;
+                
+                const roomId = state.recording.roomId || document.getElementById('joinRoomId').value.trim();
+                // CRITICAL: Use uploadedChunks (actual uploaded count) not chunkIndex
+                const totalChunks = state.recording.uploadedChunks;
+                
+                if (!roomId) {
+                    log(`❌ Cannot complete: roomId is empty`);
+                    throw new Error('Room ID is required to complete recording');
+                }
+                
+                if (totalChunks === 0) {
+                    log(`⚠️ Warning: No chunks uploaded (${totalChunks}). Still calling complete API...`);
+                }
+                
+                log(`📤 Completing recording...`);
+                log(`   Room ID: ${roomId}`);
+                log(`   Total Chunks (uploaded): ${totalChunks}`);
+                log(`   Chunk Index (next would be): ${state.recording.chunkIndex}`);
+                log(`   Total Duration: ${totalDurationSeconds}s`);
+                
+                // Call complete API (only once)
+                const response = await fetch(`${API_BASE}/live/recording/complete`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({
+                        roomId: parseInt(roomId),
+                        totalChunks: totalChunks, // Use actual uploaded count
+                        totalDurationSeconds: totalDurationSeconds
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`❌ Complete API failed: ${response.status} - ${errorText}`);
+                    throw new Error(`Complete API failed: ${response.status} - ${errorText}`);
+                }
+                
+                const data = await response.json();
+                log(`✅ Complete API response: ${JSON.stringify(data)}`);
+                
+                log('✅ Recording completed! Backend is processing...');
+                updateRecStatus('Processing...', 'info');
+                document.getElementById('recordingResult').innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>✅ Recording Complete!</strong><br>
+                        Total Duration: ${formatDuration(totalDurationSeconds)}<br>
+                        Total Chunks: ${totalChunks}<br>
+                        Status: ${data.status}<br>
+                        <small class="text-muted">${data.message}</small>
+                    </div>
+                `;
+                
+                // Auto-check status after 5 seconds
+                setTimeout(() => {
+                    log('🔄 Auto-checking recording status...');
+                    checkRecordingStatus();
+                }, 5000);
+                
+                // Cleanup
+                cleanupRecording();
+                
+            } catch (error) {
+                log(`❌ Error stopping recording: ${error.message}`);
+                console.error('❌ Stop recording error:', error);
+                updateRecStatus('Error', 'danger');
+                
+                // Don't call complete API again in catch block - already handled above
+                // Just cleanup
+                cleanupRecording();
+            }
+        }
+        
+        /**
+         * Wait for final chunk to be uploaded
+         * Simple delay to ensure ondataavailable has fired and uploaded the final chunk
+         */
+        function waitForFinalChunk() {
+            return new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+        
+        /**
+         * Upload a single chunk to backend
+         */
+        async function uploadChunk(roomId, chunkIndex, blob, durationSeconds) {
+            try {
+                // Validate blob before upload
+                if (!blob || blob.size === 0) {
+                    log(`⚠️ Chunk ${chunkIndex} is empty, skipping upload`);
+                    return;
+                }
+                
+                if (blob.size < 1000) {
+                    log(`⚠️ Chunk ${chunkIndex} is too small (${blob.size} bytes), may be corrupt`);
+                }
+                
+                log(`📤 Uploading chunk ${chunkIndex} (${(blob.size / 1024 / 1024).toFixed(2)} MB)...`);
+                document.getElementById('recordingProgress').style.display = 'block';
+                document.getElementById('uploadProgress').style.width = '50%';
+                
+                // ⭐ CRITICAL: DO NOT wrap blob - it breaks WebM structure!
+                // Wrapping blob destroys metadata/header layout → chunks after first won't play
+                // Use original blob directly from MediaRecorder
+                const formData = new FormData();
+                formData.append('file', blob, `chunk_${String(chunkIndex).padStart(3, '0')}.webm`);
+                
+                const url = `${API_BASE}/live/recording/upload-chunk?roomId=${roomId}&chunkIndex=${chunkIndex}&durationSeconds=${durationSeconds}`;
+                
+                // Upload with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+                
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: formData,
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        log(`✅ Chunk ${chunkIndex} uploaded successfully (${data.totalChunksUploaded} total)`);
+                        state.recording.uploadedChunks = data.totalChunksUploaded;
+                        document.getElementById('recChunks').textContent = data.totalChunksUploaded;
+                        document.getElementById('recLastUpload').textContent = new Date().toLocaleTimeString();
+                        document.getElementById('uploadProgress').style.width = '100%';
+                        
+                        setTimeout(() => {
+                            document.getElementById('recordingProgress').style.display = 'none';
+                            document.getElementById('uploadProgress').style.width = '0%';
+                        }, 1000);
+                    } else {
+                        log(`❌ Failed to upload chunk ${chunkIndex}: ${JSON.stringify(data)}`);
+                        throw new Error(`Upload failed: ${data.message || 'Unknown error'}`);
+                    }
+                } catch (fetchError) {
+                    clearTimeout(timeoutId);
+                    if (fetchError.name === 'AbortError') {
+                        throw new Error('Upload timeout after 60 seconds');
+                    }
+                    throw fetchError;
+                }
+                
+            } catch (error) {
+                log(`❌ Error uploading chunk ${chunkIndex}: ${error.message}`);
+                // Don't throw - continue recording even if one chunk fails
+                document.getElementById('recordingProgress').style.display = 'none';
+                throw error; // Re-throw so caller knows it failed
+            }
+        }
+        
+        /**
+         * Check recording status
+         */
+        async function checkRecordingStatus() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            
+            if (!roomId) {
+                alert('Please enter room ID');
+                return;
+            }
+            
+            try {
+                log('📊 Checking recording status...');
+                
+                const response = await fetch(`${API_BASE}/live/recording/status/${roomId}`, {
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ Status: ${data.status} - ${data.message}`);
+                    
+                    updateRecStatus(data.status, getStatusBadgeClass(data.status));
+                    
+                    let resultHtml = `
+                        <div class="alert alert-${getStatusAlertClass(data.status)}">
+                            <strong>📊 Recording Status</strong><br>
+                            Status: <span class="badge bg-${getStatusBadgeClass(data.status)}">${data.status}</span><br>
+                            Message: ${data.message}<br>
+                    `;
+                    
+                    if (data.totalChunks) {
+                        resultHtml += `Total Chunks: ${data.totalChunks}<br>`;
+                    }
+                    if (data.durationSeconds) {
+                        resultHtml += `Duration: ${formatDuration(data.durationSeconds)}<br>`;
+                    }
+                    if (data.videoUrl) {
+                        resultHtml += `
+                            <hr>
+                            <strong>🎥 Recording Ready!</strong><br>
+                            <a href="${data.videoUrl}" target="_blank" class="btn btn-success mt-2">
+                                📥 Download Video
+                            </a>
+                            <button onclick="openVideoInNewTab('${data.videoUrl}')" class="btn btn-primary mt-2">
+                                ▶️ Play Video
+                            </button>
+                        `;
+                    }
+                    
+                    resultHtml += '</div>';
+                    document.getElementById('recordingResult').innerHTML = resultHtml;
+                    
+                } else {
+                    log(`❌ Failed to get status: ${JSON.stringify(data)}`);
+                }
+                
+            } catch (error) {
+                log(`❌ Error checking status: ${error.message}`);
+            }
+        }
+        
+        /**
+         * Open video in new tab
+         */
+        function openVideoInNewTab(url) {
+            window.open(url, '_blank');
+        }
+        
+        /**
+         * Cleanup recording resources
+         */
+        function cleanupRecording() {
+            // Stop all tracks
+            if (state.recording.screenStream) {
+                state.recording.screenStream.getTracks().forEach(track => track.stop());
+            }
+            if (state.recording.micStream) {
+                state.recording.micStream.getTracks().forEach(track => track.stop());
+            }
+            if (state.recording.combinedStream) {
+                state.recording.combinedStream.getTracks().forEach(track => track.stop());
+            }
+            
+            // Close audio context
+            if (state.recording.audioContext) {
+                state.recording.audioContext.close();
+            }
+            
+            // Stop duration timer
+            if (state.recording.durationTimer) {
+                clearInterval(state.recording.durationTimer);
+            }
+            
+            // Stop chunk timer
+            if (state.recording.chunkTimer) {
+                clearInterval(state.recording.chunkTimer);
+            }
+            
+            // Reset state
+            state.recording = {
+                mediaRecorder: null,
+                combinedStream: null,
+                chunkIndex: 0,
+                isRecording: false,
+                isStopping: false,
+                startTime: null,
+                durationTimer: null,
+                chunkTimer: null,
+                totalDurationSeconds: 0,
+                uploadedChunks: 0,
+                screenStream: null,
+                micStream: null,
+                audioContext: null,
+                roomId: null,
+                isCompleting: false,
+                recordingOptions: null,
+                recordingStream: null
+            };
+            
+            // Reset UI
+            document.getElementById('startRecBtn').disabled = false;
+            document.getElementById('stopRecBtn').disabled = true;
+            document.getElementById('recDuration').textContent = '00:00';
+            document.getElementById('recChunks').textContent = '0';
+        }
+        
+        /**
+         * Start duration timer
+         */
+        function startDurationTimer() {
+            state.recording.durationTimer = setInterval(() => {
+                if (state.recording.startTime) {
+                    const seconds = Math.floor((Date.now() - state.recording.startTime) / 1000);
+                    document.getElementById('recDuration').textContent = formatDuration(seconds);
+                }
+            }, 1000);
+        }
+        
+        /**
+         * Format duration (seconds to MM:SS)
+         */
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        /**
+         * Update recording status badge
+         */
+        function updateRecStatus(status, badgeClass) {
+            const badge = document.getElementById('recStatus');
+            badge.textContent = status;
+            badge.className = `badge bg-${badgeClass}`;
+        }
+        
+        /**
+         * Get badge class for status
+         */
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'NOT_STARTED': return 'secondary';
+                case 'RECORDING': return 'danger';
+                case 'PROCESSING': return 'info';
+                case 'COMPLETED': return 'success';
+                case 'FAILED': return 'danger';
+                default: return 'secondary';
+            }
+        }
+        
+        /**
+         * Get alert class for status
+         */
+        function getStatusAlertClass(status) {
+            switch (status) {
+                case 'COMPLETED': return 'success';
+                case 'PROCESSING': return 'info';
+                case 'RECORDING': return 'warning';
+                case 'FAILED': return 'danger';
+                default: return 'info';
+            }
+        }
+        
+        // ==================== END RECORDING FUNCTIONS ====================
+
         // Initial log
         log('🚀 Live Streaming Test Page Loaded');
         log('📝 Enter your access token and click "Save Tokens" to begin');
         log('💡 NEW ARCHITECTURE: 1 Session - Multiple Handles');
         log('💡 Join room first → Then publish camera/screen → All use same session!');
+        log('🎬 Recording: Stop/restart every 30s - Each chunk is complete WebM file with header');
     </script>
 </body>
 </html>
