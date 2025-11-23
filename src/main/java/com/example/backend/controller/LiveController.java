@@ -2,6 +2,7 @@ package com.example.backend.controller;
 
 import com.example.backend.dto.request.live.*;
 import com.example.backend.dto.response.live.*;
+import com.example.backend.service.ChunkRecordingService;
 import com.example.backend.service.LiveService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -9,9 +10,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/live")
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class LiveController {
     
     private final LiveService liveService;
+    private final ChunkRecordingService chunkRecordingService;
     
     /**
      * Bắt đầu live streaming
@@ -177,13 +181,46 @@ public class LiveController {
         return ResponseEntity.ok(response);
     }
     
+    // ==================== Recording Endpoints ====================
+    
     /**
-     * Get recording for a live session
+     * Upload a recording chunk from frontend
      */
-    @GetMapping("/recording/{roomId}")
-    @Operation(summary = "Get recording", description = "Get recording URL and status for a live session")
-    public ResponseEntity<RecordingResponse> getRecording(@PathVariable Long roomId) {
-        RecordingResponse response = liveService.getRecording(roomId);
+    @PostMapping(value = "/recording/upload-chunk", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('COURSE_CREATOR')")
+    @Operation(summary = "Upload recording chunk", description = "Upload a recording chunk (WebM format) from frontend. Each chunk is typically ~30 seconds.")
+    public ResponseEntity<ChunkUploadResponse> uploadRecordingChunk(
+            @RequestParam Long roomId,
+            @RequestParam Integer chunkIndex,
+            @RequestParam(required = false) Integer durationSeconds,
+            @RequestParam("file") MultipartFile file) {
+        
+        ChunkUploadResponse response = chunkRecordingService.uploadChunk(roomId, chunkIndex, durationSeconds, file);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Complete recording and trigger merge/transcode process
+     */
+    @PostMapping("/recording/complete")
+    @PreAuthorize("hasRole('COURSE_CREATOR')")
+    @Operation(summary = "Complete recording", description = "Signal that all chunks have been uploaded and trigger merge/transcode process")
+    public ResponseEntity<RecordingStatusResponse> completeRecording(@Valid @RequestBody CompleteRecordingRequest request) {
+        RecordingStatusResponse response = chunkRecordingService.completeRecording(
+                request.getRoomId(), 
+                request.getTotalChunks(), 
+                request.getTotalDurationSeconds()
+        );
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Get recording status and URL
+     */
+    @GetMapping("/recording/status/{roomId}")
+    @Operation(summary = "Get recording status", description = "Get current recording status and video URL if completed")
+    public ResponseEntity<RecordingStatusResponse> getRecordingStatus(@PathVariable Long roomId) {
+        RecordingStatusResponse response = chunkRecordingService.getRecordingStatus(roomId);
         return ResponseEntity.ok(response);
     }
 }

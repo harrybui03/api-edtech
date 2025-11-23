@@ -18,15 +18,15 @@ public class RabbitMQConfig {
     public static final String QUEUE_NAME = "transcoding_queue";
     public static final String ROUTING_KEY = "video.transcoding.request";
     
-    // Recording Processing Queue
-    public static final String RECORDING_QUEUE_NAME = "recording_processing_queue";
-    public static final String RECORDING_ROUTING_KEY = "recording.processing.request";
+    // Recording Merge Queue
+    public static final String RECORDING_MERGE_QUEUE_NAME = "recording_merge_queue";
+    public static final String RECORDING_MERGE_ROUTING_KEY = "recording.merge.request";
 
     // Dead Letter Queue (DLQ) configuration
     public static final String DLX_NAME = "transcoding_exchange_dlx";
     public static final String DLQ_NAME = "transcoding_queue_dlq";
     public static final String DLQ_ROUTING_KEY = "dlq.video.transcoding.request";
-    public static final String RECORDING_DLQ_ROUTING_KEY = "dlq.recording.processing.request";
+    public static final String RECORDING_MERGE_DLQ_ROUTING_KEY = "dlq.recording.merge.request";
 
     @Bean
     public Queue queue() {
@@ -43,16 +43,16 @@ public class RabbitMQConfig {
     public Binding binding(Queue queue, TopicExchange exchange) { return BindingBuilder.bind(queue).to(exchange).with(ROUTING_KEY); }
     
     @Bean
-    public Queue recordingQueue() {
-        return QueueBuilder.durable(RECORDING_QUEUE_NAME)
+    public Queue recordingMergeQueue() {
+        return QueueBuilder.durable(RECORDING_MERGE_QUEUE_NAME)
                 .withArgument("x-dead-letter-exchange", DLX_NAME)
-                .withArgument("x-dead-letter-routing-key", RECORDING_DLQ_ROUTING_KEY)
+                .withArgument("x-dead-letter-routing-key", RECORDING_MERGE_DLQ_ROUTING_KEY)
                 .build();
     }
     
     @Bean
-    public Binding recordingBinding(Queue recordingQueue, TopicExchange exchange) {
-        return BindingBuilder.bind(recordingQueue).to(exchange).with(RECORDING_ROUTING_KEY);
+    public Binding recordingMergeBinding(Queue recordingMergeQueue, TopicExchange exchange) {
+        return BindingBuilder.bind(recordingMergeQueue).to(exchange).with(RECORDING_MERGE_ROUTING_KEY);
     }
 
     @Bean

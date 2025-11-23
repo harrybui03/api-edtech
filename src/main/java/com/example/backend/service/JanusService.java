@@ -109,10 +109,6 @@ public class JanusService {
         body.put("is_private", false);
         body.put("publishers", 10);
         
-        // Enable recording
-        body.put("record", true);
-        body.put("rec_dir", "/tmp/janus-recordings");
-        
         Map<String, Object> request = new HashMap<>();
         request.put("janus", "message");
         request.put("transaction", generateTransactionId());
