@@ -15,11 +15,7 @@ import com.example.backend.repository.LiveSessionRepository;
 import com.example.backend.repository.ParticipantFeedRepository;
 import com.example.backend.repository.ParticipantSessionRepository;
 import com.example.backend.repository.UserRepository;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MinioClient;
-import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +28,6 @@ import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -43,13 +38,8 @@ public class LiveService {
     private final BatchRepository batchRepository;
     private final UserRepository userRepository;
     private final LiveSessionMapper liveSessionMapper;
-    private final RecordingService recordingService;
-    private final MinioClient minioClient;
     private final ParticipantFeedRepository participantFeedRepository;
     private final ParticipantSessionRepository participantSessionRepository;
-    
-    @Value("${minio.bucket.name}")
-    private String bucketName;
     
     private final Random random = new Random();
 
@@ -119,7 +109,6 @@ public class LiveService {
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .startedAt(OffsetDateTime.now())
-                .recordingStatus(LiveSession.RecordingStatus.RECORDING)
                 .build();
         
         liveSession = liveSessionRepository.save(liveSession);
@@ -827,9 +816,6 @@ public class LiveService {
         liveSession.setEndedAt(OffsetDateTime.now());
         liveSession = liveSessionRepository.save(liveSession);
         
-        // Trigger recording processing asynchronously
-        recordingService.processRecording(liveSession.getId());
-        
         return liveSessionMapper.toResponse(liveSession);
     }
     
@@ -874,87 +860,6 @@ public class LiveService {
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
         
         return liveSessionMapper.toResponse(liveSession);
-    }
-    
-    /**
-     * Get recording for a live session
-     */
-    public RecordingResponse getRecording(Long roomId) {
-        LiveSession liveSession = liveSessionRepository.findByRoomId(roomId)
-                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
-        
-        LiveSession.RecordingStatus status = liveSession.getRecordingStatus();
-        
-        // If no recording status, default to NOT_STARTED
-        if (status == null) {
-            status = LiveSession.RecordingStatus.NOT_STARTED;
-        }
-        
-        RecordingResponse.RecordingResponseBuilder responseBuilder = RecordingResponse.builder()
-                .roomId(roomId)
-                .status(status)
-                .duration(liveSession.getRecordingDuration());
-        
-        // Handle different statuses
-        switch (status) {
-            case NOT_STARTED:
-                return responseBuilder
-                        .message("Recording was not started for this live session")
-                        .build();
-                
-            case RECORDING:
-                return responseBuilder
-                        .message("Live session is currently recording")
-                        .build();
-                
-            case PROCESSING:
-                return responseBuilder
-                        .message("Recording is being processed. Please check back later.")
-                        .build();
-                
-            case FAILED:
-                return responseBuilder
-                        .message("Recording processing failed. Please contact support.")
-                        .build();
-                
-            case COMPLETED:
-                // Generate presigned URL for the recording
-                String objectName = liveSession.getRecordingObjectName();
-                
-                if (objectName == null || objectName.isEmpty()) {
-                    return responseBuilder
-                            .status(LiveSession.RecordingStatus.FAILED)
-                            .message("Recording file path not found")
-                            .build();
-                }
-                
-                try {
-                    String presignedUrl = minioClient.getPresignedObjectUrl(
-                        GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
-                            .bucket(bucketName)
-                            .object(objectName)
-                            .expiry(2, TimeUnit.HOURS)
-                            .build()
-                    );
-                    
-                    return responseBuilder
-                            .recordingUrl(presignedUrl)
-                            .message("Recording is ready")
-                            .build();
-                    
-                } catch (Exception e) {
-                    return responseBuilder
-                            .status(LiveSession.RecordingStatus.FAILED)
-                            .message("Error generating recording URL: " + e.getMessage())
-                            .build();
-                }
-                
-            default:
-                return responseBuilder
-                        .message("Unknown recording status")
-                        .build();
-        }
     }
     
     private Long generateRoomId() {

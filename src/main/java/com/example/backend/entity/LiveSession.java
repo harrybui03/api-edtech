@@ -56,15 +56,18 @@ public class LiveSession {
     @Column(name = "ended_at")
     private OffsetDateTime endedAt;
     
-    @Column(name = "recording_object_name", length = 500)
-    private String recordingObjectName;
-    
     @Enumerated(EnumType.STRING)
     @Column(name = "recording_status", length = 20)
     private RecordingStatus recordingStatus;
     
+    @Column(name = "final_video_object_name", length = 500)
+    private String finalVideoObjectName;
+    
     @Column(name = "recording_duration")
     private Integer recordingDuration;
+    
+    @Column(name = "total_chunks")
+    private Integer totalChunks;
     
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
