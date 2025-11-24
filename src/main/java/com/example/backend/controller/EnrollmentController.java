@@ -81,4 +81,11 @@ public class EnrollmentController {
                 .build());
         return ResponseEntity.ok(enrollments);
     }
+
+    @GetMapping("/enrollments/my-courses")
+    @Operation(summary = "Get my enrolled courses", description = "Get all courses that the current user has enrolled in")
+    public ResponseEntity<List<EnrollmentResponse>> getMyEnrollments() {
+        List<EnrollmentResponse> enrollments = enrollmentService.getMyEnrollments();
+        return ResponseEntity.ok(enrollments);
+    }
 }

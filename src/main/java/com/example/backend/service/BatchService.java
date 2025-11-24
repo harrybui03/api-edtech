@@ -51,8 +51,8 @@ public class BatchService {
         batchInstructor.setInstructor(getCurrentUser());
         batchInstructor.setBatch(savedBatch);
         batchInstructorRepository.save(batchInstructor);
-        List<Tag> tags = tagService.upsertTags(request.getTag().stream().map(TagDto::getName).collect(Collectors.toList()), savedBatch.getId(), EntityType.BATCH);
-        List<Label> labels = labelService.upsertLabels(request.getLabel().stream().map(LabelDto::getName).collect(Collectors.toList()), savedBatch.getId(), EntityType.BATCH);
+        List<Tag> tags = tagService.upsertTags(request.getTags().stream().map(TagDto::getName).collect(Collectors.toList()), savedBatch.getId(), EntityType.BATCH);
+        List<Label> labels = labelService.upsertLabels(request.getLabels().stream().map(LabelDto::getName).collect(Collectors.toList()), savedBatch.getId(), EntityType.BATCH);
 
         return batchMapper.toDto(savedBatch , tags , labels);
     }
@@ -67,8 +67,8 @@ public class BatchService {
             batch.setSlug(generateUniqueSlug(request.getTitle()));
         }
 
-        List<Tag> tags = tagService.upsertTags(request.getTag().stream().map(TagDto::getName).collect(Collectors.toList()), batch.getId(), EntityType.BATCH);
-        List<Label> labels = labelService.upsertLabels(request.getLabel().stream().map(LabelDto::getName).collect(Collectors.toList()), batch.getId(), EntityType.BATCH);
+        List<Tag> tags = tagService.upsertTags(request.getTags().stream().map(TagDto::getName).collect(Collectors.toList()), batch.getId(), EntityType.BATCH);
+        List<Label> labels = labelService.upsertLabels(request.getLabels().stream().map(LabelDto::getName).collect(Collectors.toList()), batch.getId(), EntityType.BATCH);
 
         batchMapper.updateEntityFromRequest(request, batch);
 
@@ -139,31 +139,35 @@ public class BatchService {
     }
 
     @Transactional
-    public void addInstructorToBatch(UUID batchId, UUID newInstructorId) {
+    public void addInstructorsToBatch(UUID batchId, List<UUID> newInstructorIds) {
         Batch batch = findBatchById(batchId);
         checkCourseOwnership(batch);
 
-        User newInstructorUser = userRepository.findById(newInstructorId)
-                .orElseThrow(() -> new ResourceNotFoundException("User to be added as instructor not found with id: " + newInstructorId));
-
-        boolean isCourseCreator = newInstructorUser.getRoles().stream()
-                .anyMatch(userRole -> userRole.getRole() == UserRoleEnum.COURSE_CREATOR);
-
-        if (!isCourseCreator) {
-            throw new ForbiddenException("User must have the 'COURSE_CREATOR' role to be added as an instructor.");
+        List<User> newInstructors = userRepository.findAllById(newInstructorIds);
+        if (newInstructors.size() != newInstructorIds.size()) {
+            throw new ResourceNotFoundException("One or more instructors not found.");
         }
 
-        boolean alreadyExists = batch.getInstructors().stream()
-                .anyMatch(instructor -> instructor.getInstructor().getId().equals(newInstructorId));
+        for (User newInstructorUser : newInstructors) {
+            boolean isCourseCreator = newInstructorUser.getRoles().stream()
+                    .anyMatch(userRole -> userRole.getRole() == UserRoleEnum.COURSE_CREATOR);
 
-        if (alreadyExists) {
-            throw new InvalidRequestDataException("User is already an instructor for this batch.");
+            if (!isCourseCreator) {
+                throw new ForbiddenException("User " + newInstructorUser.getEmail() + " must have the 'COURSE_CREATOR' role to be added as an instructor.");
+            }
+
+            boolean alreadyExists = batch.getInstructors().stream()
+                    .anyMatch(instructor -> instructor.getInstructor().getId().equals(newInstructorUser.getId()));
+
+            if (alreadyExists) {
+                throw new InvalidRequestDataException("User " + newInstructorUser.getEmail() + " is already an instructor for this batch.");
+            }
+
+            BatchInstructor newBatchInstructor = new BatchInstructor();
+            newBatchInstructor.setBatch(batch);
+            newBatchInstructor.setInstructor(newInstructorUser);
+            batchInstructorRepository.save(newBatchInstructor);
         }
-
-        BatchInstructor newBatchInstructor = new BatchInstructor();
-        newBatchInstructor.setBatch(batch);
-        newBatchInstructor.setInstructor(newInstructorUser);
-        batchInstructorRepository.save(newBatchInstructor);
     }
 
     @Transactional
