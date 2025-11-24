@@ -30,4 +30,9 @@ public class CourseInstructor {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id", nullable = false)
     private User user;
+
+    public CourseInstructor(Course course, User user) {
+        this.course = course;
+        this.user = user;
+    }
 }

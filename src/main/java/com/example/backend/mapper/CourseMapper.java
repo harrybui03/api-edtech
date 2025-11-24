@@ -1,9 +1,6 @@
 package com.example.backend.mapper;
 
-import com.example.backend.dto.model.CourseDto;
-import com.example.backend.dto.model.CoursePublicDto;
-import com.example.backend.dto.model.ChapterDto;
-import com.example.backend.dto.model.InstructorDto;
+import com.example.backend.dto.model.*;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.entity.Chapter;
 import com.example.backend.entity.Course;
@@ -26,8 +23,8 @@ import static com.example.backend.mapper.TagMapper.toTagDtoList;
 @RequiredArgsConstructor
 public class CourseMapper {
 
-    private final FileUploadService fileUploadService;
     private final ChapterMapper chapterMapper;
+    private final UserMapper userMapper;
 
     public  CourseDto toDto(Course course, List<Tag> tags, List<Label> labels) {
         if (course == null) {
@@ -39,11 +36,7 @@ public class CourseMapper {
         dto.setSlug(course.getSlug());
         dto.setShortIntroduction(course.getShortIntroduction());
         dto.setDescription(course.getDescription());
-
-        if (StringUtils.hasText(course.getImage())) {
-            dto.setImage(fileUploadService.generatePresignedGetUrl(course.getImage()));
-        }
-
+        dto.setImage(course.getImage());
         dto.setVideoLink(course.getVideoLink());
         dto.setStatus(course.getStatus());
         dto.setPaidCourse(course.getPaidCourse());
@@ -67,6 +60,10 @@ public class CourseMapper {
                     .collect(Collectors.toList());
             dto.setChapters(chapterDtos);
         }
+        if (course.getInstructors() != null) {
+            List<UserDTO> userDTOS = course.getInstructors().stream().map(courseInstructor -> userMapper.toUserDTO(courseInstructor.getUser())).collect(Collectors.toList());
+            dto.setInstructors(userDTOS);
+        }
         return dto;
     }
 
@@ -84,9 +81,7 @@ public class CourseMapper {
         dto.setSlug(course.getSlug());
         dto.setShortIntroduction(course.getShortIntroduction());
         dto.setDescription(course.getDescription());
-        if (StringUtils.hasText(course.getImage())) {
-            dto.setImage(fileUploadService.generatePresignedGetUrl(course.getImage()));
-        }
+        dto.setImage(course.getImage());
         dto.setStatus(course.getStatus());
         dto.setSellingPrice(course.getSellingPrice());
         dto.setCurrency(course.getCurrency());

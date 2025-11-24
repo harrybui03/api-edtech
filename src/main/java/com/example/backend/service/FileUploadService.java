@@ -119,6 +119,8 @@ public class FileUploadService {
             case USER_AVATAR -> String.format("avatars/%s/%s-%s", entityID, currentTimestamp, sanitizedFileName);
             case COURSE_THUMBNAIL ->
                     String.format("courses/%s/thumbnail/%s-%s", entityID, currentTimestamp, sanitizedFileName);
+            case BATCH_THUMBNAIL ->
+                    String.format("batches/%s/thumbnail/%s-%s", entityID, currentTimestamp, sanitizedFileName);
             case LESSON_RESOURCE ->
                     String.format("lessons/%s/resources/%s-%s", entityID, currentTimestamp, sanitizedFileName);
             case LESSON_VIDEO ->
