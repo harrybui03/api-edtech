@@ -47,6 +47,13 @@ public class ParticipantSession {
     private User user;
     
     /**
+     * The display name that user used when joining the room.
+     * This is stored separately to support kicking by join name.
+     */
+    @Column(name = "display_name")
+    private String displayName;
+    
+    /**
      * Janus session ID - this is the main session for this user in this room
      * All handles (camera, screen) are attached to this session
      */
