@@ -2,17 +2,13 @@ package com.example.backend.controller;
 
 import com.example.backend.constant.BatchStatus;
 import com.example.backend.constant.CourseStatus;
-import com.example.backend.dto.model.BatchDto;
-import com.example.backend.dto.model.ChapterDto;
-import com.example.backend.dto.model.CourseDto;
-import com.example.backend.dto.model.LessonDto;
-import com.example.backend.dto.model.QuizDto;
+import com.example.backend.dto.model.*;
 import com.example.backend.dto.request.batch.CreateBatchRequest;
 import com.example.backend.dto.request.batch.UpdateBatchRequest;
 import com.example.backend.dto.request.course.ChapterRequest;
-import com.example.backend.dto.request.course.CourseRequest;
+import com.example.backend.dto.request.course.CourseRequest; 
 import com.example.backend.dto.request.course.LessonRequest;
-import com.example.backend.dto.request.instructor.InstructorIdRequest;
+import com.example.backend.dto.request.instructor.InstructorIdsRequest;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionsRequest;
@@ -90,16 +86,18 @@ public class InstructorController {
     }
 
 
-    @PostMapping("/courses/{courseId}/instructors")
-    public ResponseEntity<Void> addInstructorToCourse(@PathVariable UUID courseId, @RequestBody InstructorIdRequest request) {
-        courseService.addInstructorToCourse(courseId, request.getInstructorId());
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+    @PutMapping("/courses/{courseId}/instructors")
+    @Operation(summary = "Upsert instructors for a course", description = "Sets the list of instructors for a course. This will add new instructors and remove those not in the list.")
+    public ResponseEntity<Void> upsertInstructorsForCourse(@PathVariable UUID courseId, @RequestBody InstructorIdsRequest request) {
+        courseService.upsertInstructors(courseId, request.getInstructorIds());
+        return ResponseEntity.ok().build();
     }
 
-    @DeleteMapping("/courses/{courseId}/instructors/{instructorId}")
-    public ResponseEntity<Void> removeInstructorFromCourse(@PathVariable UUID courseId, @PathVariable UUID instructorId) {
-        courseService.removeInstructorFromCourse(courseId, instructorId);
-        return ResponseEntity.noContent().build();
+    @GetMapping("")
+    @Operation(summary = "Get all instructors", description = "Retrieves a list of all users who have the instructor role (COURSE_CREATOR).")
+    public ResponseEntity<List<UserDTO>> getAllInstructors() {
+        List<UserDTO> instructors = courseService.getAllInstructors();
+        return ResponseEntity.ok(instructors);
     }
 
     @PostMapping("/courses/{courseId}/chapters")
@@ -232,9 +230,9 @@ public class InstructorController {
     }
 
     @PostMapping("/batches/{batchId}/instructors")
-    @Operation(summary = "Add instructor to batch", description = "Instructor adds another instructor to a batch")
-    public ResponseEntity<Void> addInstructorToBatch(@PathVariable UUID batchId, @RequestBody InstructorIdRequest request) {
-        batchService.addInstructorToBatch(batchId, request.getInstructorId());
+    @Operation(summary = "Add instructors to batch", description = "Instructor adds one or more instructors to a batch")
+    public ResponseEntity<Void> addInstructorsToBatch(@PathVariable UUID batchId, @RequestBody InstructorIdsRequest request) {
+        batchService.addInstructorsToBatch(batchId, request.getInstructorIds());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 

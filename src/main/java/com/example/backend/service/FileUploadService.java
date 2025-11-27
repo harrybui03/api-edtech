@@ -2,8 +2,8 @@ package com.example.backend.service;
 
 import com.example.backend.config.RabbitMQConfig;
 import com.example.backend.constant.UploadPurpose;
-import com.example.backend.constant.job.JobStatus;
-import com.example.backend.constant.job.JobType;
+import com.example.backend.constant.JobStatus;
+import com.example.backend.constant.JobType;
 import com.example.backend.dto.message.TranscodingRequestMessage;
 import com.example.backend.dto.request.upload.TranscodeRequest;
 import com.example.backend.dto.response.upload.PresignedUrlResponse;
@@ -119,6 +119,8 @@ public class FileUploadService {
             case USER_AVATAR -> String.format("avatars/%s/%s-%s", entityID, currentTimestamp, sanitizedFileName);
             case COURSE_THUMBNAIL ->
                     String.format("courses/%s/thumbnail/%s-%s", entityID, currentTimestamp, sanitizedFileName);
+            case BATCH_THUMBNAIL ->
+                    String.format("batches/%s/thumbnail/%s-%s", entityID, currentTimestamp, sanitizedFileName);
             case LESSON_RESOURCE ->
                     String.format("lessons/%s/resources/%s-%s", entityID, currentTimestamp, sanitizedFileName);
             case LESSON_VIDEO ->

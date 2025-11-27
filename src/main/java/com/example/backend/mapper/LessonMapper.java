@@ -60,10 +60,12 @@ public class LessonMapper {
         return lesson;
     }
 
-    public void updateEntityFromRequest(LessonRequest request, Lesson lesson) {
+    public Lesson updateEntityFromRequest(LessonRequest request, Lesson lesson) {
         lesson.setTitle(request.getTitle());
         lesson.setContent(request.getContent());
         lesson.setVideoUrl(request.getVideoUrl());
         lesson.setFileUrl(request.getFileUrl());
+
+        return lesson;
     }
 }

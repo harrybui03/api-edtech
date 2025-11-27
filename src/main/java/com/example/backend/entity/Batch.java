@@ -69,6 +69,9 @@ public class Batch {
     @Column(name = "max_capacity")
     private Integer maxCapacity;
 
+    @Column
+    private String currency;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreationTimestamp
     private LocalDateTime createdAt;

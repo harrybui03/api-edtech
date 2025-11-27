@@ -1,4 +1,4 @@
-package com.example.backend.constant.job;
+package com.example.backend.constant;
 
 public enum JobType {
     VIDEO_TRANSCODING,
