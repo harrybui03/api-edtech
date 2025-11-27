@@ -21,5 +21,8 @@ public class PublishStreamRequest {
      * Optional - defaults to "camera"
      */
     private String streamType;
+    
+    // sessionId and handleId are auto-detected by backend from database
+    // No need for frontend to send them!
 }
 

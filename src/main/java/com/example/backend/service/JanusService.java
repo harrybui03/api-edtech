@@ -4,7 +4,6 @@ import com.example.backend.dto.response.live.JanusResponse;
 import com.example.backend.dto.response.live.ParticipantListResponse;
 import com.example.backend.excecption.InternalServerError;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -14,7 +13,6 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class JanusService {
     
     private final RestTemplate restTemplate;
@@ -26,8 +24,6 @@ public class JanusService {
      * Tạo Janus session
      */
     public JanusResponse createSession() {
-        log.info("Creating Janus session");
-        
         Map<String, Object> request = new HashMap<>();
         request.put("janus", "create");
         request.put("transaction", generateTransactionId());
@@ -44,17 +40,40 @@ public class JanusService {
             Map<String, Object> body = response.getBody();
             return mapToJanusResponse(body);
         } catch (Exception e) {
-            log.error("Error creating Janus session: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to create Janus session: " + e.getMessage());
         }
     }
     
     /**
+     * Send keepalive to Janus session to prevent timeout
+     */
+    public JanusResponse keepAlive(Long sessionId) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("janus", "keepalive");
+        request.put("transaction", generateTransactionId());
+
+        String url = janusServerUrl + "/" + sessionId;
+
+        try {
+            @SuppressWarnings("rawtypes")
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    url,
+                    request,
+                    Map.class
+            );
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = response.getBody();
+            return mapToJanusResponse(body);
+        } catch (Exception e) {
+            throw new InternalServerError("Failed to send keepalive: " + e.getMessage());
+        }
+    }
+
+    /**
      * Attach plugin videoroom
      */
     public JanusResponse attachPlugin(Long sessionId) {
-        log.info("Attaching videoroom plugin to session: {}", sessionId);
-        
         Map<String, Object> request = new HashMap<>();
         request.put("janus", "attach");
         request.put("plugin", "janus.plugin.videoroom");
@@ -74,7 +93,6 @@ public class JanusService {
             Map<String, Object> body = response.getBody();
             return mapToJanusResponse(body);
         } catch (Exception e) {
-            log.error("Error attaching plugin: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to attach plugin: " + e.getMessage());
         }
     }
@@ -83,8 +101,6 @@ public class JanusService {
      * Tạo room
      */
     public JanusResponse createRoom(Long sessionId, Long handleId, Long roomId) {
-        log.info("Creating room {} in session {} with handle {}", roomId, sessionId, handleId);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "create");
         body.put("room", roomId);
@@ -112,7 +128,6 @@ public class JanusService {
             Map<String, Object> responseBody = response.getBody();
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
-            log.error("Error creating room: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to create room: " + e.getMessage());
         }
     }
@@ -121,8 +136,6 @@ public class JanusService {
      * Join room
      */
     public JanusResponse joinRoom(Long sessionId, Long handleId, Long roomId, String ptype, String displayName) {
-        log.info("Joining room {} as {} with display name {}", roomId, ptype, displayName);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "join");
         body.put("room", roomId);
@@ -148,7 +161,6 @@ public class JanusService {
             Map<String, Object> responseBody = response.getBody();
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
-            log.error("Error joining room: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to join room: " + e.getMessage());
         }
     }
@@ -157,8 +169,6 @@ public class JanusService {
      * Publish stream
      */
     public JanusResponse publishStream(Long sessionId, Long handleId, String sdp) {
-        log.info("Publishing stream in session {} with handle {}", sessionId, handleId);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "publish");
         
@@ -174,7 +184,7 @@ public class JanusService {
         
         String url = janusServerUrl + "/" + sessionId + "/" + handleId;
         
-        try {
+        try{
             @SuppressWarnings("rawtypes")
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     url,
@@ -184,9 +194,86 @@ public class JanusService {
             
             @SuppressWarnings("unchecked")
             Map<String, Object> responseBody = response.getBody();
-            return mapToJanusResponse(responseBody);
+            JanusResponse janusResponse = mapToJanusResponse(responseBody);
+            
+            // If we got ACK, need to wait for event with JSEP
+            // For REST API, we can't easily get the event, so we need to poll or use long-polling
+            if ("ack".equals(janusResponse.getJanus())) {
+                // Try to get event (with retry and longer timeout)
+                try {
+                    // Retry up to 10 times with 300ms between each (total ~3 seconds)
+                    for (int attempt = 0; attempt < 10; attempt++) {
+                        Thread.sleep(300); // Wait 300ms for Janus to process
+                        
+                        // Make another request to get pending events
+                        @SuppressWarnings("rawtypes")
+                        ResponseEntity<Map> eventResponse = restTemplate.getForEntity(
+                            janusServerUrl + "/" + sessionId + "?maxev=1",
+                            Map.class
+                        );
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> eventBody = eventResponse.getBody();
+                    
+                    if (eventBody != null) {
+                        String janusType = (String) eventBody.get("janus");
+                        
+                        if ("event".equals(janusType)) {
+                            // Check if this is a relevant publish event (has JSEP or configured)
+                            boolean hasJsep = eventBody.containsKey("jsep");
+                            boolean isPublishEvent = false;
+                            
+                            if (eventBody.containsKey("plugindata")) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> plugindata = (Map<String, Object>) eventBody.get("plugindata");
+                                if (plugindata != null && plugindata.containsKey("data")) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> data = (Map<String, Object>) plugindata.get("data");
+                                    if (data != null) {
+                                        // Check if this is a publish success event
+                                        isPublishEvent = data.containsKey("configured") || 
+                                                       data.containsKey("publishers") ||
+                                                       (data.containsKey("videoroom") && 
+                                                        "event".equals(data.get("videoroom")) && 
+                                                        !data.containsKey("unpublished") && 
+                                                        !data.containsKey("leaving"));
+                                    }
+                                }
+                            }
+                            
+                            // Only process if it's a publish event with JSEP or has error
+                            if (hasJsep || isPublishEvent) {
+                                janusResponse = mapToJanusResponse(eventBody);
+                                
+                                // Check if event contains error
+                                if (janusResponse.getPlugindata() != null) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> pluginData = (Map<String, Object>) janusResponse.getPlugindata().get("data");
+                                    if (pluginData != null && pluginData.containsKey("error_code")) {
+                                        janusResponse.setError((String) pluginData.get("error"));
+                                        janusResponse.setErrorCode(((Number) pluginData.get("error_code")).intValue());
+                                        break; // Error found, stop polling
+                                    }
+                                }
+                                
+                                if (janusResponse.getJsep() != null) {
+                                    break; // Found JSEP, stop polling
+                                }
+                            }
+                        } else if ("error".equals(janusType)) {
+                            janusResponse = mapToJanusResponse(eventBody);
+                            break; // Error, stop polling
+                        }
+                    }
+                    } // end of for loop
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    // Failed to get event
+                }
+            }
+            
+            return janusResponse;
         } catch (Exception e) {
-            log.error("Error publishing stream: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to publish stream: " + e.getMessage());
         }
     }
@@ -195,8 +282,6 @@ public class JanusService {
      * Unpublish stream
      */
     public JanusResponse unpublishStream(Long sessionId, Long handleId) {
-        log.info("Unpublishing stream in session {} with handle {}", sessionId, handleId);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "unpublish");
         
@@ -219,7 +304,6 @@ public class JanusService {
             Map<String, Object> responseBody = response.getBody();
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
-            log.error("Error unpublishing stream: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to unpublish stream: " + e.getMessage());
         }
     }
@@ -228,8 +312,6 @@ public class JanusService {
      * Kick participant
      */
     public JanusResponse kickParticipant(Long sessionId, Long handleId, Long roomId, Long participantId) {
-        log.info("Kicking participant {} from room {}", participantId, roomId);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "kick");
         body.put("room", roomId);
@@ -254,7 +336,6 @@ public class JanusService {
             Map<String, Object> responseBody = response.getBody();
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
-            log.error("Error kicking participant: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to kick participant: " + e.getMessage());
         }
     }
@@ -262,13 +343,17 @@ public class JanusService {
     /**
      * Configure subscriber to receive stream from a publisher
      * Janus will return SDP offer in response
+     * 
+     * Note: For VideoRoom subscriber, we use "join" with feed parameter
      */
-    public JanusResponse configureSubscriber(Long sessionId, Long handleId, Long feedId) {
-        log.info("Configuring subscriber to receive feed: {}", feedId);
-        
+    public JanusResponse configureSubscriber(Long sessionId, Long handleId, Long roomId, Long feedId) {
         Map<String, Object> body = new HashMap<>();
-        body.put("request", "configure");
+        body.put("request", "join");
+        body.put("room", roomId);  // Required!
+        body.put("ptype", "subscriber");
         body.put("feed", feedId);
+        body.put("offer_audio", true);
+        body.put("offer_video", true);
         
         Map<String, Object> request = new HashMap<>();
         request.put("janus", "message");
@@ -287,9 +372,58 @@ public class JanusService {
             
             @SuppressWarnings("unchecked")
             Map<String, Object> responseBody = response.getBody();
-            return mapToJanusResponse(responseBody);
+            JanusResponse janusResponse = mapToJanusResponse(responseBody);
+            
+            // If we got ACK, need to wait for event with SDP offer (similar to publish)
+            if ("ack".equals(janusResponse.getJanus())) {
+                try {
+                    // Retry up to 3 times with 500ms between each
+                    for (int attempt = 0; attempt < 3; attempt++) {
+                        Thread.sleep(500);
+                        
+                        @SuppressWarnings("rawtypes")
+                        ResponseEntity<Map> eventResponse = restTemplate.getForEntity(
+                            janusServerUrl + "/" + sessionId + "?maxev=1",
+                            Map.class
+                        );
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> eventBody = eventResponse.getBody();
+                    
+                        if (eventBody != null) {
+                            String janusType = (String) eventBody.get("janus");
+                            
+                            if ("event".equals(janusType)) {
+                                janusResponse = mapToJanusResponse(eventBody);
+                                
+                                // Check if event contains error
+                                if (janusResponse.getPlugindata() != null) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> pluginData = (Map<String, Object>) janusResponse.getPlugindata().get("data");
+                                    if (pluginData != null && pluginData.containsKey("error_code")) {
+                                        janusResponse.setError((String) pluginData.get("error"));
+                                        janusResponse.setErrorCode(((Number) pluginData.get("error_code")).intValue());
+                                        break;
+                                    }
+                                }
+                                
+                                if (janusResponse.getJsep() != null) {
+                                    break; // Found JSEP, stop polling
+                                }
+                            } else if ("error".equals(janusType)) {
+                                janusResponse = mapToJanusResponse(eventBody);
+                                break;
+                            }
+                        }
+                    } // end of for loop
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    // Failed to get subscriber event
+                }
+            }
+            
+            return janusResponse;
         } catch (Exception e) {
-            log.error("Error configuring subscriber: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to configure subscriber: " + e.getMessage());
         }
     }
@@ -298,8 +432,6 @@ public class JanusService {
      * Start subscriber (send SDP answer after receiving offer)
      */
     public JanusResponse startSubscriber(Long sessionId, Long handleId, String sdpAnswer) {
-        log.info("Starting subscriber with SDP answer in session {} handle {}", sessionId, handleId);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "start");
         
@@ -327,7 +459,6 @@ public class JanusService {
             Map<String, Object> responseBody = response.getBody();
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
-            log.error("Error starting subscriber: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to start subscriber: " + e.getMessage());
         }
     }
@@ -336,8 +467,6 @@ public class JanusService {
      * List participants
      */
     public ParticipantListResponse listParticipants(Long sessionId, Long handleId, Long roomId) {
-        log.info("Listing participants in room {}", roomId);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "listparticipants");
         body.put("room", roomId);
@@ -392,7 +521,6 @@ public class JanusService {
                     .participants(new ArrayList<>())
                     .build();
         } catch (Exception e) {
-            log.error("Error listing participants: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to list participants: " + e.getMessage());
         }
     }
@@ -401,8 +529,6 @@ public class JanusService {
      * Destroy room
      */
     public JanusResponse destroyRoom(Long sessionId, Long handleId, Long roomId) {
-        log.info("Destroying room {}", roomId);
-        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "destroy");
         body.put("room", roomId);
@@ -426,7 +552,6 @@ public class JanusService {
             Map<String, Object> responseBody = response.getBody();
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
-            log.error("Error destroying room: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to destroy room: " + e.getMessage());
         }
     }
@@ -435,8 +560,6 @@ public class JanusService {
      * Destroy session
      */
     public JanusResponse destroySession(Long sessionId) {
-        log.info("Destroying session {}", sessionId);
-        
         Map<String, Object> request = new HashMap<>();
         request.put("janus", "destroy");
         request.put("transaction", generateTransactionId());
@@ -455,7 +578,6 @@ public class JanusService {
             Map<String, Object> body = response.getBody();
             return mapToJanusResponse(body);
         } catch (Exception e) {
-            log.error("Error destroying session: {}", e.getMessage(), e);
             throw new InternalServerError("Failed to destroy session: " + e.getMessage());
         }
     }

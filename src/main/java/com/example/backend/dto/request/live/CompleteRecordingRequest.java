@@ -1,5 +1,6 @@
 package com.example.backend.dto.request.live;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,15 +9,15 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class JoinLiveRequest {
+public class CompleteRecordingRequest {
     
     @NotNull(message = "Room ID is required")
     private Long roomId;
     
-    @NotNull(message = "Participant type is required (publisher/subscriber)")
-    private String ptype;
+    @NotNull(message = "Total chunks is required")
+    @Min(value = 1, message = "Must have at least 1 chunk")
+    private Integer totalChunks;
     
-    // Optional: Display name to show in the room (if not provided, use user's full name)
-    private String displayName;
+    private Integer totalDurationSeconds;
 }
 

@@ -16,16 +16,6 @@ public class SubscribeRequest {
     @NotNull(message = "Publisher feed ID is required")
     private Long feedId;
     
-    /**
-     * Subscriber session ID (from join response)
-     */
-    @NotNull(message = "Session ID is required")
-    private Long sessionId;
-    
-    /**
-     * Subscriber handle ID (from join response)
-     */
-    @NotNull(message = "Handle ID is required")
-    private Long handleId;
+    // Note: sessionId and handleId are now created by backend
+    // Each feed subscription gets its own session/handle per Janus VideoRoom design
 }
-

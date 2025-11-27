@@ -13,25 +13,21 @@ import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionsRequest;
 import com.example.backend.dto.request.payos.CreatePayOSConfigRequest;
-import com.example.backend.dto.request.payos.UpdatePayOSConfigRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.payos.PayOSConfigResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
 import com.example.backend.service.*;
-import com.example.backend.service.ChapterService;
-import com.example.backend.service.CourseService;
-import com.example.backend.service.LessonService;
-import com.example.backend.service.EnrollmentService;
-import com.example.backend.service.PayOSConfigService;
-import com.example.backend.service.QuizService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.UUID;
@@ -48,7 +44,6 @@ public class InstructorController {
     private final QuizService quizService;
     private final BatchService batchService;
     private final PayOSConfigService payOSConfigService;
-    private final JobService jobService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -131,12 +126,6 @@ public class InstructorController {
         return ResponseEntity.ok(lessonService.updateLesson(lessonId, request));
     }
 
-    @GetMapping("/lessons/{lessonId}")
-    @Operation(summary = "Get lesson by ID for instructor", description = "Instructor gets their lesson details.")
-    public ResponseEntity<LessonDto> getLessonByIdForInstructor(@PathVariable UUID lessonId) {
-        return ResponseEntity.ok(lessonService.getLessonByIdForInstructor(lessonId));
-    }
-
     @DeleteMapping("/lessons/{lessonId}")
     public ResponseEntity<Void> deleteLesson(@PathVariable UUID lessonId) {
         lessonService.deleteLesson(lessonId);
@@ -179,25 +168,11 @@ public class InstructorController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/quizzes/{quizId}/questions")
-    @Operation(summary = "Get all questions for a quiz", description = "Instructor retrieves all questions for a specific quiz.")
-    public ResponseEntity<List<QuizQuestionDto>> getQuestionsByQuizId(@PathVariable UUID quizId) {
-        List<QuizQuestionDto> questions = quizService.getQuestionsByQuizId(quizId);
-        return ResponseEntity.ok(questions);
-    }
-
     @PostMapping("/quizzes/{quizId}/questions")
     @Operation(summary = "Add questions to quiz", description = "Instructor adds multiple questions to a quiz")
     public ResponseEntity<QuizDto> addQuestionsToQuiz(@PathVariable UUID quizId, @RequestBody QuizQuestionsRequest request) {
         QuizDto quiz = quizService.addQuestionsToQuiz(quizId, request.getQuestions());
         return ResponseEntity.status(HttpStatus.CREATED).body(quiz);
-    }
-
-    @DeleteMapping("/questions/{questionId}")
-    @Operation(summary = "Delete question", description = "Instructor deletes a quiz question")
-    public ResponseEntity<Void> deleteQuestion(@PathVariable UUID questionId) {
-        quizService.deleteQuestion(questionId);
-        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/questions/{questionId}")
@@ -267,9 +242,7 @@ public class InstructorController {
         batchService.removeInstructorFromBatch(batchId, instructorId);
         return ResponseEntity.noContent().build();
     }
-
-
-
+    
     // PayOS Configuration APIs
     @PostMapping("/payos-configs")
     @Operation(summary = "Create PayOS configuration", description = "Create a new PayOS configuration for an instructor")
@@ -282,20 +255,6 @@ public class InstructorController {
     @Operation(summary = "Get my PayOS configuration", description = "Get current user's active PayOS configuration")
     public ResponseEntity<PayOSConfigResponse> getMyPayOSConfig() {
         PayOSConfigResponse response = payOSConfigService.getMyPayOSConfig();
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/my-jobs")
-    @Operation(summary = "Get my jobs", description = "Instructor gets a paginated list of their created jobs (e.g., video transcoding).")
-    public ResponseEntity<PaginationResponse<JobDto>> getMyJobs(Pageable pageable) {
-        Page<JobDto> jobs = jobService.getMyJobs(pageable);
-        return ResponseEntity.ok(new PaginationResponse<>(jobs));
-    }
-
-    @PutMapping("/payos-configs/{configId}")
-    @Operation(summary = "Update PayOS configuration", description = "Update an existing PayOS configuration for the current instructor")
-    public ResponseEntity<PayOSConfigResponse> updatePayOSConfig(@PathVariable UUID configId, @RequestBody UpdatePayOSConfigRequest request) {
-        PayOSConfigResponse response = payOSConfigService.updatePayOSConfig(configId, request);
         return ResponseEntity.ok(response);
     }
 }
