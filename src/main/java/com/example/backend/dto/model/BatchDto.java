@@ -36,4 +36,5 @@ public class BatchDto {
     private Integer maxCapacity;
     private List<TagDto> tags;
     private List<LabelDto> labels;
+    private List<InstructorDto> instructors;
 }
