@@ -8,8 +8,7 @@ CREATE TABLE participant_sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ended_at TIMESTAMPTZ,
     
-    CONSTRAINT fk_participant_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT uk_participant_room UNIQUE (user_id, room_id)
+    CONSTRAINT fk_participant_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Create indexes

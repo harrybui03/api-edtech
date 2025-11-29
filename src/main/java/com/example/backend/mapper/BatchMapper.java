@@ -2,11 +2,13 @@ package com.example.backend.mapper;
 
 import com.example.backend.constant.BatchStatus;
 import com.example.backend.dto.model.BatchDto;
+import com.example.backend.dto.model.InstructorDto;
 import com.example.backend.dto.request.batch.CreateBatchRequest;
 import com.example.backend.dto.request.batch.UpdateBatchRequest;
 import com.example.backend.entity.Batch;
 import com.example.backend.entity.Label;
 import com.example.backend.entity.Tag;
+import com.example.backend.entity.BatchInstructor;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -49,7 +51,25 @@ public class BatchMapper {
         dto.setAmountUsd(batch.getAmountUsd());
         dto.setOpenTime(batch.getOpenTime());
         dto.setCloseTime(batch.getCloseTime());
+
+        if (batch.getInstructors() != null) {
+            dto.setInstructors(batch.getInstructors().stream()
+                    .map(this::toInstructorDto)
+                    .toList());
+        }
         return dto;
+    }
+
+    private InstructorDto toInstructorDto(BatchInstructor batchInstructor) {
+        if (batchInstructor == null || batchInstructor.getInstructor() == null) {
+            return null;
+        }
+        return new InstructorDto(
+                batchInstructor.getInstructor().getId(),
+                batchInstructor.getInstructor().getFullName(),
+                batchInstructor.getInstructor().getEmail(),
+                batchInstructor.getInstructor().getUserImage()
+        );
     }
 
     /**

@@ -67,7 +67,7 @@ dependencies {
 	compileOnly 'org.projectlombok:lombok'
 	implementation 'org.springframework.boot:spring-boot-starter-amqp'
 	// PayOS Java SDK (pinned version)
-	implementation 'vn.payos:payos-java:1.0.3'
+    implementation 'vn.payos:payos-java:2.0.1'
 
 	runtimeOnly 'org.postgresql:postgresql'
 	runtimeOnly 'org.flywaydb:flyway-database-postgresql:10.4.1'
