@@ -42,7 +42,8 @@ public class SecurityConfig {
             "/css/**",
             "/js/**",
             "/email/**",
-            "/payment/**"
+            "/payment/**",
+            "/ws/**"
     };
 
     @Bean

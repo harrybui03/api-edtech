@@ -33,4 +33,5 @@ public class CourseDto {
     private List<TagDto> tags;
     private List<LabelDto> labels;
     private List<ChapterDto> chapters;
+    private List<UserDTO> instructors;
 }

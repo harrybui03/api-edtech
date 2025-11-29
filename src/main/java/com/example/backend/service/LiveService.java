@@ -188,6 +188,7 @@ public class LiveService {
         ParticipantSession participantSession = ParticipantSession.builder()
                 .roomId(request.getRoomId())
                 .user(currentUser)
+                .displayName(displayName)
                 .janusSessionId(sessionId)
                 .isActive(true)
                 .build();
@@ -249,6 +250,7 @@ public class LiveService {
                     ParticipantSession newSession = ParticipantSession.builder()
                             .roomId(request.getRoomId())
                             .user(currentUser)
+                            .displayName(currentUser.getFullName())
                             .janusSessionId(newSessionId)
                             .isActive(true)
                             .build();
@@ -361,6 +363,7 @@ public class LiveService {
                     ParticipantSession newSession = ParticipantSession.builder()
                             .roomId(request.getRoomId())
                             .user(currentUser)
+                            .displayName(currentUser.getFullName())
                             .janusSessionId(newSessionId)
                             .isActive(true)
                             .build();
@@ -860,6 +863,32 @@ public class LiveService {
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
         
         return liveSessionMapper.toResponse(liveSession);
+    }
+
+    /**
+     * Get list of participants in a room from participant_sessions table
+     * Trả ra userId và tên lúc join phòng để tiện cho việc kick
+     */
+    public RoomParticipantResponse getRoomParticipants(Long roomId) {
+        // Ensure live session exists
+        liveSessionRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
+
+        List<ParticipantSession> activeSessions = participantSessionRepository.findByRoomIdAndIsActiveTrue(roomId);
+
+        List<RoomParticipantResponse.ParticipantInfo> participantInfos = activeSessions.stream()
+                .map(session -> RoomParticipantResponse.ParticipantInfo.builder()
+                        .userId(session.getUser().getId())
+                        .displayName(session.getDisplayName() != null
+                                ? session.getDisplayName()
+                                : session.getUser().getFullName())
+                        .build())
+                .toList();
+
+        return RoomParticipantResponse.builder()
+                .roomId(roomId)
+                .participants(participantInfos)
+                .build();
     }
     
     private Long generateRoomId() {

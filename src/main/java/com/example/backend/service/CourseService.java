@@ -3,16 +3,14 @@ package com.example.backend.service;
 import com.example.backend.constant.CourseStatus;
 import com.example.backend.constant.EntityType;
 import com.example.backend.constant.UserRoleEnum;
-import com.example.backend.dto.model.CourseDto;
-import com.example.backend.dto.model.CoursePublicDto;
-import com.example.backend.dto.model.LabelDto;
-import com.example.backend.dto.model.TagDto;
+import com.example.backend.dto.model.*;
 import com.example.backend.dto.request.course.CourseRequest;
 import com.example.backend.entity.*;
 import com.example.backend.excecption.ForbiddenException;
 import com.example.backend.excecption.InvalidRequestDataException;
 import com.example.backend.excecption.ResourceNotFoundException;
 import com.example.backend.mapper.CourseMapper;
+import com.example.backend.mapper.UserMapper;
 import com.example.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -40,9 +39,8 @@ public class CourseService {
     private final TagService tagService;
     private final TagRepository tagRepository;
     private final LabelRepository labelRepository;
+    private final UserMapper userMapper;
 
-
-    
 
     @Transactional(readOnly = true)
     public Page<CoursePublicDto> getPublishedCourses(Pageable pageable, List<String> tags, List<String> labels, String search) {
@@ -170,48 +168,58 @@ public class CourseService {
     }
 
     @Transactional
-    public void addInstructorToCourse(UUID courseId, UUID newInstructorId) {
+    public void upsertInstructors(UUID courseId, List<UUID> instructorIds) {
+        if (instructorIds == null || instructorIds.isEmpty()) {
+            throw new InvalidRequestDataException("Instructor list cannot be empty.");
+        }
+
         Course course = findCourseById(courseId);
         checkCourseOwnership(course);
 
-        User newInstructorUser = userRepository.findById(newInstructorId)
-                .orElseThrow(() -> new ResourceNotFoundException("User to be added as instructor not found with id: " + newInstructorId));
+        Set<UUID> currentInstructorIds = course.getInstructors().stream()
+                .map(ci -> ci.getUser().getId())
+                .collect(Collectors.toSet());
 
-        boolean isCourseCreator = newInstructorUser.getRoles().stream()
-                .anyMatch(userRole -> userRole.getRole() == UserRoleEnum.COURSE_CREATOR);
+        Set<UUID> newInstructorIdsSet = instructorIds.stream().collect(Collectors.toSet());
 
-        if (!isCourseCreator) {
-            throw new ForbiddenException("User must have the 'COURSE_CREATOR' role to be added as an instructor.");
+        // Determine which instructors to add
+        List<UUID> idsToAdd = newInstructorIdsSet.stream()
+                .filter(id -> !currentInstructorIds.contains(id))
+                .collect(Collectors.toList());
+
+        // Determine which instructors to remove
+        List<UUID> idsToRemove = currentInstructorIds.stream()
+                .filter(id -> !newInstructorIdsSet.contains(id))
+                .collect(Collectors.toList());
+
+        // Remove instructors
+        if (!idsToRemove.isEmpty()) {
+            courseInstructorRepository.deleteByCourseIdAndUserIdIn(courseId, idsToRemove);
         }
 
-        boolean alreadyExists = course.getInstructors().stream()
-                .anyMatch(instructor -> instructor.getUser().getId().equals(newInstructorId));
+        // Add new instructors
+        if (!idsToAdd.isEmpty()) {
+            List<User> usersToAdd = userRepository.findAllById(idsToAdd);
+            if (usersToAdd.size() != idsToAdd.size()) {
+                throw new ResourceNotFoundException("One or more users to be added as instructors were not found.");
+            }
 
-        if (alreadyExists) {
-            throw new InvalidRequestDataException("User is already an instructor for this course.");
+            for (User user : usersToAdd) {
+                if (user.getRoles().stream().noneMatch(role -> role.getRole() == UserRoleEnum.COURSE_CREATOR)) {
+                    throw new ForbiddenException("User " + user.getEmail() + " must have the 'COURSE_CREATOR' role.");
+                }
+                CourseInstructor newInstructor = new CourseInstructor(course, user);
+                courseInstructorRepository.save(newInstructor);
+            }
         }
-
-        CourseInstructor newCourseInstructor = new CourseInstructor();
-        newCourseInstructor.setCourse(course);
-        newCourseInstructor.setUser(newInstructorUser);
-        courseInstructorRepository.save(newCourseInstructor);
     }
 
-    @Transactional
-    public void removeInstructorFromCourse(UUID courseId, UUID instructorIdToRemove) {
-        Course course = findCourseById(courseId);
-        checkCourseOwnership(course);
-
-        if (course.getInstructors().size() <= 1) {
-            throw new ForbiddenException("Cannot remove the last instructor from a course.");
-        }
-
-        CourseInstructor instructorToRemove = course.getInstructors().stream()
-                .filter(ci -> ci.getUser().getId().equals(instructorIdToRemove))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Instructor with id " + instructorIdToRemove + " not found on this course."));
-
-        course.getInstructors().remove(instructorToRemove);
+    @Transactional(readOnly = true)
+    public List<UserDTO> getAllInstructors() {
+        List<User> instructors = userRepository.findByRole(UserRoleEnum.COURSE_CREATOR);
+        return instructors.stream()
+                .map(userMapper::toUserDTO)
+                .collect(Collectors.toList());
     }
 
     private User getCurrentUser() {

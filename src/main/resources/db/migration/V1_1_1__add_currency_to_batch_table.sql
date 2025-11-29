@@ -1,0 +1,1 @@
+ALTER TABLE batch ADD COLUMN currency VARCHAR(50);

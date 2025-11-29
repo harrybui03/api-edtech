@@ -7,11 +7,13 @@ import com.example.backend.dto.request.batch.UpdateBatchRequest;
 import com.example.backend.entity.Batch;
 import com.example.backend.entity.Label;
 import com.example.backend.entity.Tag;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@AllArgsConstructor
 public class BatchMapper {
 
     /**
@@ -20,18 +22,20 @@ public class BatchMapper {
      * @param batch The Batch entity to convert.
      * @return The corresponding BatchDto.
      */
+
     public BatchDto toDto(Batch batch , List<Tag> tags, List<Label> labels) {
         if (batch == null) {
             return null;
         }
+
         BatchDto dto = new BatchDto();
+        dto.setImage(batch.getImage());
         dto.setId(batch.getId());
         dto.setTitle(batch.getTitle());
         dto.setDescription(batch.getDescription());
         dto.setSlug(batch.getSlug());
-        dto.setImage(batch.getImage());
-        dto.setTag(TagMapper.toTagDtoList(tags));
-        dto.setLabel(LabelMapper.toLabelDtoList(labels));
+        dto.setTags(TagMapper.toTagDtoList(tags));
+        dto.setLabels(LabelMapper.toLabelDtoList(labels));
         dto.setVideoLink(batch.getVideoLink());
         dto.setPaidBatch(batch.isPaidBatch());
         dto.setActualPrice(batch.getActualPrice());
@@ -41,6 +45,10 @@ public class BatchMapper {
         dto.setEndTime(batch.getEndTime());
         dto.setStatus(batch.getStatus());
         dto.setMaxCapacity(batch.getMaxCapacity());
+        dto.setCurrency(batch.getCurrency());
+        dto.setAmountUsd(batch.getAmountUsd());
+        dto.setOpenTime(batch.getOpenTime());
+        dto.setCloseTime(batch.getCloseTime());
         return dto;
     }
 
@@ -67,6 +75,8 @@ public class BatchMapper {
         batch.setEndTime(request.getEndTime());
         batch.setStatus(request.getStatus() != null ? request.getStatus() : BatchStatus.DRAFT);
         batch.setMaxCapacity(request.getMaxCapacity());
+        batch.setCurrency(request.getCurrency());
+        batch.setAmountUsd(request.getAmountUsd());
         return batch;
     }
 
@@ -116,6 +126,18 @@ public class BatchMapper {
         }
         if (request.getMaxCapacity() != null) {
             batch.setMaxCapacity(request.getMaxCapacity());
+        }
+        if (request.getCurrency() != null) {
+            batch.setCurrency(request.getCurrency());
+        }
+        if (request.getAmountUsd() != null) {
+            batch.setAmountUsd(request.getAmountUsd());
+        }
+        if (request.getOpenTime() != null) {
+            batch.setOpenTime(request.getOpenTime());
+        }
+        if (request.getCloseTime() != null) {
+            batch.setCloseTime(request.getCloseTime());
         }
     }
 }

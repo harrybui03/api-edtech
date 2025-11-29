@@ -130,7 +130,7 @@ public class LiveController {
      * List participants (publishers) in room
      * Subscriber dùng để lấy danh sách publishers và feed IDs
      */
-    @GetMapping("/participants/{roomId}")
+    @GetMapping("/participants-feeds/{roomId}")
     @Operation(summary = "List participants", description = "Get list of all participants (publishers) in a live session. Returns feed IDs for subscribers. Use excludeFeedId to filter out your own stream.")
     public ResponseEntity<ParticipantListResponse> listParticipants(
             @PathVariable Long roomId,
@@ -178,6 +178,17 @@ public class LiveController {
     @Operation(summary = "Get my feeds", description = "Get all active feeds (camera, screen) for current user in a room")
     public ResponseEntity<MyFeedsResponse> getMyFeeds(@PathVariable Long roomId) {
         MyFeedsResponse response = liveService.getMyFeeds(roomId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get list of participants in a room from participant_sessions
+     * Trả ra userId và tên lúc join phòng để tiện cho việc kick
+     */
+    @GetMapping("/participants-names/{roomId}")
+    @Operation(summary = "Get room participants", description = "Get list of participants in a room with userId and join display name")
+    public ResponseEntity<RoomParticipantResponse> getRoomParticipants(@PathVariable Long roomId) {
+        RoomParticipantResponse response = liveService.getRoomParticipants(roomId);
         return ResponseEntity.ok(response);
     }
     

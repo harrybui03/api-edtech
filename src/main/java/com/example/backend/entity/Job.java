@@ -1,14 +1,13 @@
 package com.example.backend.entity;
 
 import com.example.backend.constant.UploadPurpose;
-import com.example.backend.constant.job.JobStatus;
-import com.example.backend.constant.job.JobType;
+import com.example.backend.constant.JobStatus;
+import com.example.backend.constant.JobType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 

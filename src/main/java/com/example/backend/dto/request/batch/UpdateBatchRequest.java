@@ -24,11 +24,15 @@ public class UpdateBatchRequest {
     private Boolean paidBatch;
     private BigDecimal actualPrice;
     private BigDecimal sellingPrice;
+    private BigDecimal amountUsd;
+    private String currency;
     private String language;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    private LocalDateTime openTime;
+    private LocalDateTime closeTime;
     private BatchStatus status;
     private Integer maxCapacity;
-    private List<TagDto> tag;
-    private List<LabelDto> label;
+    private List<TagDto> tags;
+    private List<LabelDto> labels;
 }

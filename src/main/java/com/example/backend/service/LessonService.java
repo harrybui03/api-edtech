@@ -78,12 +78,12 @@ public class LessonService {
             lesson.setSlug(generateUniqueSlug(request.getTitle()));
         }
 
-        lessonMapper.updateEntityFromRequest(request, lesson);
+        Lesson lessonConvert = lessonMapper.updateEntityFromRequest(request, lesson);
         if (request.getQuizId() != null) {
-            lesson.setQuiz(quizRepository.findById(request.getQuizId())
+            lessonConvert.setQuiz(quizRepository.findById(request.getQuizId())
                     .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + request.getQuizId())));
         }
-        Lesson updatedLesson = lessonRepository.save(lesson);
+        Lesson updatedLesson = lessonRepository.save(lessonConvert);
         return lessonMapper.toDto(updatedLesson);
     }
 
