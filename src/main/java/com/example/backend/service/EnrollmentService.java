@@ -6,6 +6,7 @@ import com.example.backend.constant.EnrollmentRole;
 import com.example.backend.dto.request.enrollment.CurrentEnrollmentRequest;
 import com.example.backend.dto.response.enrollment.CurrentEnrollmentResponse;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
+import com.example.backend.dto.response.enrollment.BatchEnrollmentResponse;
 import com.example.backend.entity.*;
 import com.example.backend.excecption.DataNotFoundException;
 import com.example.backend.excecption.InvalidRequestDataException;
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,8 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,7 +47,8 @@ public class EnrollmentService {
     private final EnrollmentMapper enrollmentMapper;
     private final BatchRepository batchRepository;
     private final BatchEnrollmentRepository batchEnrollmentRepository;
-private final LiveSessionRepository liveSessionRepository;
+    private final LiveSessionRepository liveSessionRepository;
+    private final TransactionRepository transactionRepository;
 
     // ... (other methods remain the same)
     public EnrollmentResponse enrollInCourseBySlug(String courseSlug) {
@@ -142,25 +149,94 @@ private final LiveSessionRepository liveSessionRepository;
         User student = userRepository.findByEmail(studentEmail)
                 .orElseThrow(() -> new DataNotFoundException("Student not found"));
 
-        String sortBy = currentEnrollmentRequest.getFilterBy().equals(CurrentEnrollmentRequest.FilterBy.COURSE) ? "creation" : "enrolledAt";
-        Pageable pageable = PageRequest.of(currentEnrollmentRequest.getPage(), currentEnrollmentRequest.getSize(), Sort.by(sortBy).descending());
+        int page = currentEnrollmentRequest.getPage();
+        int size = currentEnrollmentRequest.getSize();
+
+        List<CurrentEnrollmentResponse> responses = new ArrayList<>();
 
         if (currentEnrollmentRequest.getFilterBy().equals(CurrentEnrollmentRequest.FilterBy.BATCH)) {
+            // Paid batch enrollments from transactions
+            List<Transaction> batchTransactions = transactionRepository
+                    .findByStudentIdAndStatus(student.getId(), Transaction.TransactionStatus.PAID, Pageable.unpaged())
+                    .getContent()
+                    .stream()
+                    .filter(t -> t.getBatch() != null)
+                    .collect(Collectors.toList());
 
-            return batchEnrollmentRepository.findByMemberId(student.getId(), pageable).map(enrollment -> CurrentEnrollmentResponse
-                    .builder()
-                    .enrollmentDate(enrollment.getEnrolledAt())
-                    .courseTitle(enrollment.getBatch().getTitle())
-                    .price(enrollment.getBatch().getAmountUsd()).build());
+            Set<UUID> paidBatchIds = batchTransactions.stream()
+                    .map(t -> t.getBatch().getId())
+                    .collect(Collectors.toCollection(HashSet::new));
+
+            for (Transaction tx : batchTransactions) {
+                OffsetDateTime enrollmentDate = tx.getPaidAt() != null ? tx.getPaidAt() : tx.getCreatedAt();
+                responses.add(CurrentEnrollmentResponse.builder()
+                        .enrollmentDate(enrollmentDate)
+                        .courseTitle(tx.getBatch().getTitle())
+                        .price(tx.getAmount())
+                        .build());
+            }
+
+            // Free batch enrollments (no paid transaction)
+            List<BatchEnrollment> batchEnrollments = batchEnrollmentRepository
+                    .findByMemberId(student.getId(), Pageable.unpaged())
+                    .getContent();
+
+            for (BatchEnrollment be : batchEnrollments) {
+                if (!paidBatchIds.contains(be.getBatch().getId())) {
+                    responses.add(CurrentEnrollmentResponse.builder()
+                            .enrollmentDate(be.getEnrolledAt())
+                            .courseTitle(be.getBatch().getTitle())
+                            .price(BigDecimal.ZERO)
+                            .build());
+                }
+            }
+        } else {
+            // Paid course enrollments from transactions
+            List<Transaction> courseTransactions = transactionRepository
+                    .findByStudentIdAndStatus(student.getId(), Transaction.TransactionStatus.PAID, Pageable.unpaged())
+                    .getContent()
+                    .stream()
+                    .filter(t -> t.getCourse() != null)
+                    .collect(Collectors.toList());
+
+            Set<UUID> paidCourseIds = courseTransactions.stream()
+                    .map(t -> t.getCourse().getId())
+                    .collect(Collectors.toCollection(HashSet::new));
+
+            for (Transaction tx : courseTransactions) {
+                OffsetDateTime enrollmentDate = tx.getPaidAt() != null ? tx.getPaidAt() : tx.getCreatedAt();
+                responses.add(CurrentEnrollmentResponse.builder()
+                        .enrollmentDate(enrollmentDate)
+                        .courseTitle(tx.getCourse().getTitle())
+                        .price(tx.getAmount())
+                        .build());
+            }
+
+            // Free course enrollments (no paid transaction)
+            List<Enrollment> enrollments = enrollmentRepository.findByMemberId(student.getId());
+            for (Enrollment enrollment : enrollments) {
+                if (!paidCourseIds.contains(enrollment.getCourse().getId())) {
+                    responses.add(CurrentEnrollmentResponse.builder()
+                            .enrollmentDate(enrollment.getCreation())
+                            .courseTitle(enrollment.getCourse().getTitle())
+                            .price(BigDecimal.ZERO)
+                            .build());
+                }
+            }
         }
 
-        return enrollmentRepository.findByMemberId(student.getId() , pageable).map(enrollment ->
-                CurrentEnrollmentResponse
-                        .builder()
-                        .enrollmentDate(enrollment.getCreation())
-                        .courseTitle(enrollment.getCourse().getTitle())
-                        .price(enrollment.getCourse().getCoursePrice()).build()
-        );
+        // Sort by enrollmentDate desc
+        responses.sort(Comparator.comparing(CurrentEnrollmentResponse::getEnrollmentDate).reversed());
+
+        // Manual paging
+        int fromIndex = page * size;
+        int toIndex = Math.min(fromIndex + size, responses.size());
+        List<CurrentEnrollmentResponse> pageContent = fromIndex >= responses.size()
+                ? new ArrayList<>()
+                : responses.subList(fromIndex, toIndex);
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("enrollmentDate").descending());
+        return new PageImpl<>(pageContent, pageable, responses.size());
     }
 
     @Transactional(readOnly = true)
@@ -215,6 +291,36 @@ private final LiveSessionRepository liveSessionRepository;
         courseRepository.save(course);
 
         log.info("Successfully removed enrollment {}", enrollmentId);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<BatchEnrollmentResponse> getBatchEnrollments(UUID batchId, Pageable pageable) {
+        String currentUserEmail = getCurrentUserEmail();
+        log.info("Getting enrollments for batch {} by user {}", batchId, currentUserEmail);
+
+        User currentUser = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new RuntimeException("Batch not found"));
+
+        boolean isInstructor = batch.getInstructors().stream()
+                .anyMatch(bi -> bi.getInstructor().getId().equals(currentUser.getId()));
+
+        boolean isEnrolledStudent = batchEnrollmentRepository.existsByUserIdAndBatchId(currentUser.getId(), batchId);
+
+        if (!isInstructor && !isEnrolledStudent) {
+            throw new RuntimeException("You are not authorized to view enrollments for this batch");
+        }
+
+        return batchEnrollmentRepository.findByBatchId(batchId, pageable)
+                .map(enrollment -> BatchEnrollmentResponse.builder()
+                        .id(enrollment.getId())
+                        .userId(enrollment.getUser().getId())
+                        .fullName(enrollment.getUser().getFullName())
+                        .email(enrollment.getUser().getEmail())
+                        .enrolledAt(enrollment.getEnrolledAt())
+                        .build());
     }
 
     @Transactional(readOnly = true)

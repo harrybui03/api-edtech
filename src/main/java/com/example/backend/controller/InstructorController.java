@@ -14,6 +14,7 @@ import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionsRequest;
 import com.example.backend.dto.request.payos.CreatePayOSConfigRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
+import com.example.backend.dto.response.enrollment.BatchEnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.payos.PayOSConfigResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
@@ -144,6 +145,13 @@ public class InstructorController {
     public ResponseEntity<Void> removeEnrollment(@PathVariable UUID enrollmentId) {
         enrollmentService.removeEnrollment(enrollmentId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/batches/{batchId}/enrollments")
+    @Operation(summary = "Get batch enrollments", description = "Instructor gets all enrollments for their batch")
+    public ResponseEntity<Page<BatchEnrollmentResponse>> getBatchEnrollments(@PathVariable UUID batchId, Pageable pageable) {
+        Page<BatchEnrollmentResponse> enrollments = enrollmentService.getBatchEnrollments(batchId, pageable);
+        return ResponseEntity.ok(enrollments);
     }
     
     // Quiz Management APIs

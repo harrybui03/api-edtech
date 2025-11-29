@@ -82,6 +82,19 @@ public class EnrollmentController {
         return ResponseEntity.ok(enrollments);
     }
 
+    @GetMapping("/enrollments/my-batches")
+    @Operation(summary = "Get my enrolled batches", description = "Get all batches that the current user has enrolled in")
+    public ResponseEntity<Page<CurrentEnrollmentResponse>> getMyBatchEnrollments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Page<CurrentEnrollmentResponse> enrollments = enrollmentService.getCurrentUserEnrollments(CurrentEnrollmentRequest.builder()
+                .page(page)
+                .size(size)
+                .filterBy(CurrentEnrollmentRequest.FilterBy.BATCH)
+                .build());
+        return ResponseEntity.ok(enrollments);
+    }
+
     @GetMapping("/enrollments/my-courses")
     @Operation(summary = "Get my enrolled courses", description = "Get all courses that the current user has enrolled in")
     public ResponseEntity<List<EnrollmentResponse>> getMyEnrollments() {
