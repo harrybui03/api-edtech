@@ -3,11 +3,6 @@ package com.example.backend.service;
 import com.example.backend.entity.PayOSConfig;
 import com.example.backend.entity.Transaction;
 import vn.payos.PayOS;
-import vn.payos.type.CheckoutResponseData;
-import vn.payos.type.ItemData;
-import vn.payos.type.PaymentData;
-import vn.payos.type.Webhook;
-import vn.payos.type.WebhookData;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,44 +38,104 @@ public class PayOSIntegrationService {
                     config.getChecksumKey()
             );
 
-            String itemName = transaction.getCourse() != null
-                    ? transaction.getCourse().getTitle()
-                    : (transaction.getBatch() != null ? transaction.getBatch().getTitle() : "Item");
-            ItemData item = ItemData.builder()
-                    .name(itemName)
-                    .quantity(1)
-                    .price(transaction.getAmount().intValue())
-                    .build();
-
             String description = transaction.getDescription();
             String shortDescription = description != null && description.length() > 25
                     ? description.substring(0, 25)
                     : description;
 
-            PaymentData paymentData = PaymentData.builder()
-                    .orderCode(transaction.getOrderCode())
-                    .amount(transaction.getAmount().intValue())
-                    .description(shortDescription)
-                    .returnUrl(transaction.getReturnUrl())
-                    .cancelUrl(transaction.getCancelUrl())
-                    .item(item) // or .items(List.of(item)) depending on SDK version
-                    .build();
+            try {
+                Class<?> createPaymentLinkRequestClass = Class.forName("vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest");
+                Object paymentRequestBuilder = createPaymentLinkRequestClass.getMethod("builder").invoke(null);
+                Class<?> builderClass = paymentRequestBuilder.getClass();
+                
+                // Set orderCode (Long)
+                try {
+                    builderClass.getMethod("orderCode", Long.class).invoke(paymentRequestBuilder, transaction.getOrderCode());
+                } catch (NoSuchMethodException e) {
+                    builderClass.getMethod("orderCode", long.class).invoke(paymentRequestBuilder, transaction.getOrderCode());
+                }
+                
+                try {
+                    builderClass.getMethod("amount", Long.class).invoke(paymentRequestBuilder, transaction.getAmount().longValue());
+                } catch (NoSuchMethodException e) {
+                    builderClass.getMethod("amount", long.class).invoke(paymentRequestBuilder, transaction.getAmount().longValue());
+                }
+                
+                // Set description, returnUrl, cancelUrl
+                builderClass.getMethod("description", String.class).invoke(paymentRequestBuilder, 
+                    shortDescription != null ? shortDescription : "Thanh toán đơn hàng");
+                builderClass.getMethod("returnUrl", String.class).invoke(paymentRequestBuilder, transaction.getReturnUrl());
+                builderClass.getMethod("cancelUrl", String.class).invoke(paymentRequestBuilder, transaction.getCancelUrl());
+                
+                Object paymentRequest = builderClass.getMethod("build").invoke(paymentRequestBuilder);
+                
+                log.debug("Payment request object created successfully");
+                
+                // Use paymentRequests().create() method
+                Object paymentRequests = payOS.getClass().getMethod("paymentRequests").invoke(payOS);
+                log.debug("Calling paymentRequests().create()...");
+                Object paymentLink = paymentRequests.getClass().getMethod("create", createPaymentLinkRequestClass).invoke(paymentRequests, paymentRequest);
+                
+                // Extract response data
+                String paymentLinkId = null;
+                String checkoutUrl = null;
+                String qrCode = null;
+                
+                // Get checkoutUrl (required)
+                checkoutUrl = (String) paymentLink.getClass().getMethod("getCheckoutUrl").invoke(paymentLink);
+                
+                // Try to get payment ID
+                try {
+                    Object id = paymentLink.getClass().getMethod("getId").invoke(paymentLink);
+                    paymentLinkId = id != null ? id.toString() : null;
+                } catch (NoSuchMethodException e) {
+                    try {
+                        paymentLinkId = (String) paymentLink.getClass().getMethod("getPaymentLinkId").invoke(paymentLink);
+                    } catch (NoSuchMethodException ex) {
+                        // Payment ID not available
+                    }
+                }
+                
+                // Try to get QR code
+                try {
+                    qrCode = (String) paymentLink.getClass().getMethod("getQrCode").invoke(paymentLink);
+                } catch (NoSuchMethodException e) {
+                    // QR code not available
+                }
+                
+                PayOSPaymentResponse res = new PayOSPaymentResponse();
+                res.setCode("00");
+                res.setMessage("success");
+                PayOSPaymentResponse.Data data = new PayOSPaymentResponse.Data();
+                data.setPaymentId(paymentLinkId);
+                data.setPaymentUrl(checkoutUrl);
+                data.setQrCode(qrCode);
+                res.setData(data);
+                return res;
+                
+            } catch (Exception e) {
+                log.error("Error using PayOS SDK 2.0.1 API: {}", e.getMessage(), e);
+                
+                // Check if it's a signature error
+                if (e.getMessage() != null && e.getMessage().contains("signature") || 
+                    (e.getCause() != null && e.getCause().getMessage() != null && 
+                     e.getCause().getMessage().contains("signature"))) {
+                    log.error("PayOS signature error detected. Please verify:");
+                    log.error("1. Checksum key is correct in PayOSConfig");
+                    log.error("2. Client ID, API Key, and Checksum Key match your PayOS account");
+                    log.error("3. All required fields are provided (orderCode, amount, description, returnUrl, cancelUrl)");
+                    throw new RuntimeException("PayOS signature validation failed. Please check your PayOS configuration (Client ID, API Key, Checksum Key) are correct and match your PayOS account.", e);
+                }
+                
+                throw new RuntimeException("Error creating PayOS payment request: " + e.getMessage(), e);
+            }
 
-            CheckoutResponseData sdkRes = payOS.createPaymentLink(paymentData);
-
-            PayOSPaymentResponse res = new PayOSPaymentResponse();
-            res.setCode("00");
-            res.setMessage("success");
-            PayOSPaymentResponse.Data data = new PayOSPaymentResponse.Data();
-            data.setPaymentId(sdkRes.getPaymentLinkId());
-            data.setPaymentUrl(sdkRes.getCheckoutUrl());
-            data.setQrCode(sdkRes.getQrCode());
-            res.setData(data);
-            return res;
-
+        } catch (RuntimeException e) {
+            // Re-throw runtime exceptions as-is
+            throw e;
         } catch (Exception e) {
             log.error("Error creating PayOS payment request: {}", e.getMessage(), e);
-            throw new RuntimeException("Error creating PayOS payment request: " + e.getMessage());
+            throw new RuntimeException("Error creating PayOS payment request: " + e.getMessage(), e);
         }
     }
 
@@ -94,29 +149,37 @@ public class PayOSIntegrationService {
         }
     }
 
-    // Verify webhook using SDK and return code ("00" success)
     public String verifyWebhookAndGetCode(String rawBody, PayOSConfig config) {
         try {
-            PayOS payOS = new PayOS(config.getClientId(), config.getApiKey(), config.getChecksumKey());
-
-            // Normalize payload to satisfy SDK schema (fill missing required fields)
-            com.fasterxml.jackson.databind.node.ObjectNode root = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(rawBody);
-            com.fasterxml.jackson.databind.node.ObjectNode data = (com.fasterxml.jackson.databind.node.ObjectNode) root.with("data");
-
-            if (!data.hasNonNull("reference")) data.put("reference", "TF000000000000");
-            if (!data.has("accountNumber")) data.put("accountNumber", "");
-            if (!data.has("currency")) data.put("currency", "VND");
-            if (!data.has("paymentLinkId")) data.put("paymentLinkId", "");
-            if (!data.has("transactionDateTime")) data.put("transactionDateTime", "1970-01-01 00:00:00");
-            if (!data.has("code")) data.put("code", "00");
-            if (!data.has("desc")) data.put("desc", "success");
-
-            Webhook webhook = objectMapper.treeToValue(root, Webhook.class);
-            WebhookData webhookData = payOS.verifyPaymentWebhookData(webhook);
-            return webhookData.getCode();
+            // Parse webhook JSON
+            com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(rawBody);
+            
+            // Extract signature from webhook
+            String signature = rootNode.has("signature") ? rootNode.get("signature").asText() : null;
+            
+            if (signature == null) {
+                log.warn("Webhook missing signature");
+                return "01"; // Invalid - no signature
+            }
+            
+            // Remove signature from body for verification
+            com.fasterxml.jackson.databind.node.ObjectNode bodyWithoutSignature = rootNode.deepCopy();
+            bodyWithoutSignature.remove("signature");
+            String bodyForVerification = objectMapper.writeValueAsString(bodyWithoutSignature);
+            
+            // Verify signature
+            String expectedSignature = generateHmacSha256(bodyForVerification, config.getChecksumKey());
+            if (!signature.equals(expectedSignature)) {
+                log.warn("Webhook signature verification failed");
+                return "01"; // Invalid signature
+            }
+            
+            // Extract code from webhook data
+            String code = rootNode.has("code") ? rootNode.get("code").asText() : "00";
+            return code;
         } catch (Exception e) {
-            log.error("SDK webhook verify failed: {}", e.getMessage(), e);
-            throw new RuntimeException("SDK webhook verify failed: " + e.getMessage());
+            log.error("Webhook verification failed: {}", e.getMessage(), e);
+            return "01";
         }
     }
 
