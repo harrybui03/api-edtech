@@ -883,7 +883,7 @@
             try {
                 // Backend automatically filters out all YOUR feeds (camera + screen)
                 // No need to manually exclude - it uses your auth token to identify you!
-                const url = `${API_BASE}/live/participants/${roomId}`;
+                const url = `${API_BASE}/live/participants-feeds/${roomId}`;
                 
                 const response = await fetch(url, {
                     headers: getHeaders()
@@ -1435,7 +1435,7 @@
                     headers: getHeaders(),
                     body: JSON.stringify({
                         roomId: parseInt(roomId),
-                        totalChunks: totalChunks, // Use actual uploaded count
+                        totalChunks: totalChunks - 1, // Use actual uploaded count
                         totalDurationSeconds: totalDurationSeconds
                     })
                 });
