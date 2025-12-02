@@ -5,18 +5,22 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Request to unpublish a stream (camera or screen)
+ * Frontend provides sessionId and handleId directly
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UnpublishScreenRequest {
+public class UnpublishRequest {
     
     @NotNull(message = "Room ID is required")
     private Long roomId;
     
-    @NotNull(message = "Screen session ID is required")
-    private Long screenSessionId;
+    @NotNull(message = "Session ID is required")
+    private Long sessionId;
     
-    @NotNull(message = "Screen handle ID is required")
-    private Long screenHandleId;
+    @NotNull(message = "Handle ID is required")
+    private Long handleId;
 }
 

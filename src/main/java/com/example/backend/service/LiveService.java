@@ -210,7 +210,6 @@ public class LiveService {
      */
     @Transactional
     public PublishStreamResponse publishStream(PublishStreamRequest request) {
-        String streamType = request.getStreamType() != null ? request.getStreamType() : "camera";
         User currentUser = getCurrentUser();
         
         // Validate live session exists
@@ -221,13 +220,9 @@ public class LiveService {
             throw new IllegalStateException("Live session is not published");
         }
         
-        // Check if user already has an active camera feed
-        Optional<ParticipantFeed> existingCameraFeed = participantFeedRepository.findAll().stream()
-                .filter(f -> f.getUser().getId().equals(currentUser.getId()) 
-                        && f.getRoomId().equals(request.getRoomId())
-                        && f.getFeedType() == ParticipantFeed.FeedType.CAMERA
-                        && f.getIsActive())
-                .findFirst();
+        // Check if user already has an active camera feed (use direct query for fresh data)
+        Optional<ParticipantFeed> existingCameraFeed = participantFeedRepository
+                .findActiveCameraFeed(currentUser.getId(), request.getRoomId());
         
         if (existingCameraFeed.isPresent()) {
             throw new IllegalStateException("User already has an active camera stream in this room. Please unpublish first.");
@@ -346,6 +341,14 @@ public class LiveService {
             throw new IllegalStateException("Live session is not published");
         }
         
+        // Check if user already has an active screen feed (use direct query for fresh data)
+        Optional<ParticipantFeed> existingScreenFeed = participantFeedRepository
+                .findActiveScreenFeed(currentUser.getId(), request.getRoomId());
+        
+        if (existingScreenFeed.isPresent()) {
+            throw new IllegalStateException("User already has an active screen share in this room. Please stop sharing first.");
+        }
+        
         // 🔥 Get or create user's main session
         ParticipantSession participantSession = participantSessionRepository
                 .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId())
@@ -444,74 +447,92 @@ public class LiveService {
     
     /**
      * Unpublish stream (camera/microphone)
-     * Destroys ONLY the camera handle, keeps main session alive
+     * Destroys ONLY the specified handle, keeps main session alive
+     * Frontend provides sessionId and handleId directly
      */
     @Transactional
-    public JanusResponse unpublishStream(Long roomId) {
-        User currentUser = getCurrentUser();
-        
+    public JanusResponse unpublishStream(UnpublishRequest request) {
         // Validate live session exists
-        liveSessionRepository.findByRoomId(roomId)
-                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
+        liveSessionRepository.findByRoomId(request.getRoomId())
+                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        // Find camera feed from database
-        List<ParticipantFeed> userFeeds = participantFeedRepository
-                .findByUserAndRoomIdAndIsActiveTrue(currentUser, roomId);
+        Long sessionId = request.getSessionId();
+        Long handleId = request.getHandleId();
         
-        ParticipantFeed cameraFeed = userFeeds.stream()
-                .filter(feed -> feed.getFeedType() == ParticipantFeed.FeedType.CAMERA)
-                .findFirst()
-                .orElseThrow(() -> new DataNotFoundException(
-                        "No active camera feed found for user " + currentUser.getFullName() + " in room " + roomId));
+        // Deactivate feed in database FIRST
+        int updated = participantFeedRepository.deactivateFeed(sessionId, handleId);
         
-        Long sessionId = cameraFeed.getSessionId();
-        Long cameraHandleId = cameraFeed.getHandleId();
+        // Try to unpublish from Janus (may fail if already unpublished due to ICE timeout, etc.)
+        JanusResponse unpublishResponse = null;
+        try {
+            unpublishResponse = janusService.unpublishStream(sessionId, handleId);
+        } catch (Exception e) {
+            // Log but continue - handle may already be unpublished
+            unpublishResponse = new JanusResponse();
+            unpublishResponse.setJanus("error");
+            unpublishResponse.setError("Unpublish failed: " + e.getMessage());
+        }
         
-        // Deactivate feed in database
-        participantFeedRepository.deactivateFeed(sessionId, cameraHandleId);
+        // 🔥 Always detach handle to cleanup resources (even if unpublish failed)
+        try {
+            janusService.detachPlugin(sessionId, handleId);
+        } catch (Exception e) {
+            // Log but don't fail - handle may already be detached
+        }
         
-        // Unpublish from Janus
-        JanusResponse unpublishResponse = janusService.unpublishStream(sessionId, cameraHandleId);
+        // Return success if we updated DB, even if Janus had issues
+        if (updated > 0) {
+            JanusResponse successResponse = new JanusResponse();
+            successResponse.setJanus("success");
+            return successResponse;
+        }
         
-        // 🔥 Do NOT destroy session - keep it alive for other feeds (screen, etc.)
-        // Session will be destroyed when user leaves room or is kicked
-        return unpublishResponse;
+        return unpublishResponse != null ? unpublishResponse : new JanusResponse();
     }
     
     /**
      * Unpublish screen share stream
-     * Destroys ONLY the screen handle, keeps main session alive
+     * Destroys ONLY the specified handle, keeps main session alive
+     * Frontend provides sessionId and handleId directly
      */
     @Transactional
-    public JanusResponse unpublishScreenShare(Long roomId) {
-        User currentUser = getCurrentUser();
-        
+    public JanusResponse unpublishScreenShare(UnpublishRequest request) {
         // Validate live session exists
-        liveSessionRepository.findByRoomId(roomId)
-                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + roomId));
+        liveSessionRepository.findByRoomId(request.getRoomId())
+                .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        // Find screen feed from database
-        List<ParticipantFeed> userFeeds = participantFeedRepository
-                .findByUserAndRoomIdAndIsActiveTrue(currentUser, roomId);
+        Long sessionId = request.getSessionId();
+        Long handleId = request.getHandleId();
         
-        ParticipantFeed screenFeed = userFeeds.stream()
-                .filter(feed -> feed.getFeedType() == ParticipantFeed.FeedType.SCREEN)
-                .findFirst()
-                .orElseThrow(() -> new DataNotFoundException(
-                        "No active screen feed found for user " + currentUser.getFullName() + " in room " + roomId));
+        // Deactivate screen feed in database FIRST
+        int updated = participantFeedRepository.deactivateFeed(sessionId, handleId);
         
-        Long sessionId = screenFeed.getSessionId();
-        Long screenHandleId = screenFeed.getHandleId();
+        // Try to unpublish from Janus (may fail if already unpublished)
+        JanusResponse unpublishResponse = null;
+        try {
+            unpublishResponse = janusService.unpublishStream(sessionId, handleId);
+        } catch (Exception e) {
+            // Log but continue - handle may already be unpublished
+            unpublishResponse = new JanusResponse();
+            unpublishResponse.setJanus("error");
+            unpublishResponse.setError("Unpublish failed: " + e.getMessage());
+        }
         
-        // Deactivate screen feed in database
-        participantFeedRepository.deactivateFeed(sessionId, screenHandleId);
+        // 🔥 Always detach handle to cleanup resources
+        try {
+            janusService.detachPlugin(sessionId, handleId);
+        } catch (Exception e) {
+            // Log but don't fail - handle may already be detached
+        }
         
-        // Unpublish screen stream
-        JanusResponse unpublishResponse = janusService.unpublishStream(sessionId, screenHandleId);
+        // Return success if we updated DB, even if Janus had issues
+        if (updated > 0) {
+            JanusResponse successResponse = new JanusResponse();
+            successResponse.setJanus("success");
+            return successResponse;
+        }
         
-        // 🔥 Do NOT destroy session - keep it alive for other feeds (camera, etc.)
-        // Session will be destroyed when user leaves room or is kicked
-        return unpublishResponse;
+        return unpublishResponse != null ? unpublishResponse : new JanusResponse();
     }
     
     /**
@@ -915,7 +936,6 @@ public class LiveService {
     private Long pollForFeedId(Long roomId, String displayName, long timeoutMs) {
         long startTime = System.currentTimeMillis();
         int pollIntervalMs = 200; // Poll every 200ms
-        int attemptCount = 0;
         
         // Get live session for this room
         LiveSession liveSession = liveSessionRepository.findByRoomId(roomId).orElse(null);
@@ -924,7 +944,6 @@ public class LiveService {
         }
         
         while (System.currentTimeMillis() - startTime < timeoutMs) {
-            attemptCount++;
             
             try {
                 // Query Janus for list of participants

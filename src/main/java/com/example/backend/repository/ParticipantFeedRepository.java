@@ -60,5 +60,17 @@ public interface ParticipantFeedRepository extends JpaRepository<ParticipantFeed
     @Modifying
     @Query("UPDATE ParticipantFeed pf SET pf.isActive = false, pf.endedAt = CURRENT_TIMESTAMP WHERE pf.sessionId = :sessionId AND pf.handleId = :handleId")
     int deactivateFeed(Long sessionId, Long handleId);
+    
+    /**
+     * Check if user has active camera feed in room
+     */
+    @Query("SELECT pf FROM ParticipantFeed pf WHERE pf.user.id = :userId AND pf.roomId = :roomId AND pf.feedType = 'CAMERA' AND pf.isActive = true")
+    Optional<ParticipantFeed> findActiveCameraFeed(UUID userId, Long roomId);
+    
+    /**
+     * Check if user has active screen feed in room
+     */
+    @Query("SELECT pf FROM ParticipantFeed pf WHERE pf.user.id = :userId AND pf.roomId = :roomId AND pf.feedType = 'SCREEN' AND pf.isActive = true")
+    Optional<ParticipantFeed> findActiveScreenFeed(UUID userId, Long roomId);
 }
 
