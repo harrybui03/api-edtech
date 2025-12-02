@@ -70,20 +70,20 @@ public class LiveController {
     /**
      * Unpublish stream (camera/microphone)
      */
-    @PostMapping("/unpublish/{roomId}")
-    @Operation(summary = "Unpublish stream", description = "Stop publishing camera/microphone stream")
-    public ResponseEntity<JanusResponse> unpublishStream(@PathVariable Long roomId) {
-        JanusResponse response = liveService.unpublishStream(roomId);
+    @PostMapping("/unpublish")
+    @Operation(summary = "Unpublish stream", description = "Stop publishing camera/microphone stream. Requires sessionId and handleId.")
+    public ResponseEntity<JanusResponse> unpublishStream(@Valid @RequestBody UnpublishRequest request) {
+        JanusResponse response = liveService.unpublishStream(request);
         return ResponseEntity.ok(response);
     }
     
     /**
      * Unpublish screen share stream
      */
-    @PostMapping("/unpublish-screen/{roomId}")
-    @Operation(summary = "Unpublish screen share", description = "Stop publishing screen share stream independently from camera")
-    public ResponseEntity<JanusResponse> unpublishScreenShare(@PathVariable Long roomId) {
-        JanusResponse response = liveService.unpublishScreenShare(roomId);
+    @PostMapping("/unpublish-screen")
+    @Operation(summary = "Unpublish screen share", description = "Stop publishing screen share stream independently from camera. Requires sessionId and handleId.")
+    public ResponseEntity<JanusResponse> unpublishScreenShare(@Valid @RequestBody UnpublishRequest request) {
+        JanusResponse response = liveService.unpublishScreenShare(request);
         return ResponseEntity.ok(response);
     }
     

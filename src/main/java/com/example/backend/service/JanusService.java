@@ -217,10 +217,22 @@ public class JanusService {
                     if (eventBody != null) {
                         String janusType = (String) eventBody.get("janus");
                         
+                        // Check if this event is for our handle
+                        Long eventSender = null;
+                        if (eventBody.containsKey("sender")) {
+                            eventSender = ((Number) eventBody.get("sender")).longValue();
+                        }
+                        
+                        // Skip events from other handles to avoid race conditions
+                        if (eventSender != null && !eventSender.equals(handleId)) {
+                            continue; // Skip this event, try next one
+                        }
+                        
                         if ("event".equals(janusType)) {
                             // Check if this is a relevant publish event (has JSEP or configured)
                             boolean hasJsep = eventBody.containsKey("jsep");
                             boolean isPublishEvent = false;
+                            boolean isUnpublishOrLeaveEvent = false;
                             
                             if (eventBody.containsKey("plugindata")) {
                                 @SuppressWarnings("unchecked")
@@ -229,28 +241,41 @@ public class JanusService {
                                     @SuppressWarnings("unchecked")
                                     Map<String, Object> data = (Map<String, Object>) plugindata.get("data");
                                     if (data != null) {
+                                        // Skip unpublish/leave events - they are from previous requests
+                                        isUnpublishOrLeaveEvent = data.containsKey("unpublished") || 
+                                                                   data.containsKey("leaving");
+                                        
                                         // Check if this is a publish success event
                                         isPublishEvent = data.containsKey("configured") || 
                                                        data.containsKey("publishers") ||
                                                        (data.containsKey("videoroom") && 
                                                         "event".equals(data.get("videoroom")) && 
-                                                        !data.containsKey("unpublished") && 
-                                                        !data.containsKey("leaving"));
+                                                        !isUnpublishOrLeaveEvent);
                                     }
                                 }
                             }
                             
-                            // Only process if it's a publish event with JSEP or has error
+                            // Skip unpublish/leave events - they are not for publish request
+                            if (isUnpublishOrLeaveEvent) {
+                                continue; // Skip this event, try next one
+                            }
+                            
+                            // Only process if it's a publish event with JSEP
                             if (hasJsep || isPublishEvent) {
                                 janusResponse = mapToJanusResponse(eventBody);
                                 
-                                // Check if event contains error
+                                // Check if event contains error (but only for publish-related errors)
                                 if (janusResponse.getPlugindata() != null) {
                                     @SuppressWarnings("unchecked")
                                     Map<String, Object> pluginData = (Map<String, Object>) janusResponse.getPlugindata().get("data");
                                     if (pluginData != null && pluginData.containsKey("error_code")) {
+                                        int errorCode = ((Number) pluginData.get("error_code")).intValue();
+                                        // Error 435 = "Can't unpublish, not published" - skip this, it's from unpublish request
+                                        if (errorCode == 435) {
+                                            continue; // Skip this error, try next event
+                                        }
                                         janusResponse.setError((String) pluginData.get("error"));
-                                        janusResponse.setErrorCode(((Number) pluginData.get("error_code")).intValue());
+                                        janusResponse.setErrorCode(errorCode);
                                         break; // Error found, stop polling
                                     }
                                 }
@@ -260,6 +285,17 @@ public class JanusService {
                                 }
                             }
                         } else if ("error".equals(janusType)) {
+                            // Check error code - skip 435 (unpublish error)
+                            if (eventBody.containsKey("error")) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> error = (Map<String, Object>) eventBody.get("error");
+                                if (error != null && error.containsKey("code")) {
+                                    int errorCode = ((Number) error.get("code")).intValue();
+                                    if (errorCode == 435) {
+                                        continue; // Skip unpublish error, try next event
+                                    }
+                                }
+                            }
                             janusResponse = mapToJanusResponse(eventBody);
                             break; // Error, stop polling
                         }
@@ -305,6 +341,32 @@ public class JanusService {
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
             throw new InternalServerError("Failed to unpublish stream: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Detach plugin handle (destroy handle but keep session)
+     */
+    public JanusResponse detachPlugin(Long sessionId, Long handleId) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("janus", "detach");
+        request.put("transaction", generateTransactionId());
+        
+        String url = janusServerUrl + "/" + sessionId + "/" + handleId;
+        
+        try {
+            @SuppressWarnings("rawtypes")
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    url,
+                    request,
+                    Map.class
+            );
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> responseBody = response.getBody();
+            return mapToJanusResponse(responseBody);
+        } catch (Exception e) {
+            throw new InternalServerError("Failed to detach plugin: " + e.getMessage());
         }
     }
     
@@ -639,4 +701,5 @@ public class JanusService {
         return UUID.randomUUID().toString();
     }
 }
+
 
