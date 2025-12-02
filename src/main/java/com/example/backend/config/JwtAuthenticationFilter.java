@@ -1,5 +1,6 @@
 package com.example.backend.config;
 
+import com.example.backend.excecption.UnauthorizedException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -68,7 +69,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         } catch (JwtException | IllegalArgumentException e) {
-            throw new BadCredentialsException(e.getMessage(), e);
+            throw new UnauthorizedException(e.getMessage());
         }
         filterChain.doFilter(request, response);
     }

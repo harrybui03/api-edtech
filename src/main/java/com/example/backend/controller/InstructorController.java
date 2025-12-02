@@ -16,8 +16,11 @@ import com.example.backend.dto.request.payos.CreatePayOSConfigRequest;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.enrollment.BatchEnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
+import com.example.backend.dto.response.statistics.PerformanceReportItem;
 import com.example.backend.dto.response.payos.PayOSConfigResponse;
+import com.example.backend.dto.response.statistics.RevenueOverTimeResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
+import com.example.backend.dto.response.statistics.InstructorStatsResponse;
 import com.example.backend.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +48,8 @@ public class InstructorController {
     private final QuizService quizService;
     private final BatchService batchService;
     private final PayOSConfigService payOSConfigService;
+    private final JobService jobService;
+    private final StatisticsService statisticsService;
 
     @PostMapping("/courses")
     public ResponseEntity<CourseDto> createCourse(@RequestBody CourseRequest request) {
@@ -153,7 +158,7 @@ public class InstructorController {
         Page<BatchEnrollmentResponse> enrollments = enrollmentService.getBatchEnrollments(batchId, pageable);
         return ResponseEntity.ok(enrollments);
     }
-    
+
     // Quiz Management APIs
     @PostMapping("/quizzes")
     @Operation(summary = "Create a new quiz", description = "Instructor creates a new quiz for a course")
@@ -250,7 +255,37 @@ public class InstructorController {
         batchService.removeInstructorFromBatch(batchId, instructorId);
         return ResponseEntity.noContent().build();
     }
-    
+
+    @GetMapping("/statistics/overview")
+    @Operation(summary = "Get instructor statistics overview", description = "Retrieves an overview of the instructor's published content and revenue.")
+    public ResponseEntity<InstructorStatsResponse> getInstructorStatsOverview() {
+        return ResponseEntity.ok(statisticsService.getInstructorOverviewStats());
+    }
+
+    @GetMapping("/statistics/revenue-over-time")
+    @Operation(summary = "Get instructor revenue over a time period", description = "Retrieves revenue data points for charting, filterable by period and type.")
+    public ResponseEntity<RevenueOverTimeResponse> getRevenueOverTime(
+            @RequestParam(defaultValue = "MONTH") String period, // WEEK, MONTH, YEAR, ALL_TIME
+            @RequestParam(defaultValue = "COURSE") String type // COURSE, BATCH
+    ) {
+        RevenueOverTimeResponse response = statisticsService.getRevenueOverTime(period, type);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/statistics/course-performance")
+    @Operation(summary = "Get course performance report", description = "Retrieves a paginated and sortable list of course performance metrics.")
+    public ResponseEntity<PaginationResponse<PerformanceReportItem>> getCoursePerformance(Pageable pageable) {
+        Page<PerformanceReportItem> report = statisticsService.getCoursePerformanceReport(pageable);
+        return ResponseEntity.ok(new PaginationResponse<>(report));
+    }
+
+    @GetMapping("/statistics/batch-performance")
+    @Operation(summary = "Get batch performance report", description = "Retrieves a paginated and sortable list of batch performance metrics.")
+    public ResponseEntity<PaginationResponse<PerformanceReportItem>> getBatchPerformance(Pageable pageable) {
+        Page<PerformanceReportItem> report = statisticsService.getBatchPerformanceReport(pageable);
+        return ResponseEntity.ok(new PaginationResponse<>(report));
+    }
+
     // PayOS Configuration APIs
     @PostMapping("/payos-configs")
     @Operation(summary = "Create PayOS configuration", description = "Create a new PayOS configuration for an instructor")
