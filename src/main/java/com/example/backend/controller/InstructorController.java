@@ -181,6 +181,13 @@ public class InstructorController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/quizzes/{quizId}/questions")
+    @Operation(summary = "Get all questions for a quiz", description = "Instructor retrieves all questions for a specific quiz.")
+    public ResponseEntity<List<QuizQuestionDto>> getQuestionsByQuizId(@PathVariable UUID quizId) {
+        List<QuizQuestionDto> questions = quizService.getQuestionsByQuizId(quizId);
+        return ResponseEntity.ok(questions);
+    }
+
     @PostMapping("/quizzes/{quizId}/questions")
     @Operation(summary = "Add questions to quiz", description = "Instructor adds multiple questions to a quiz")
     public ResponseEntity<QuizDto> addQuestionsToQuiz(@PathVariable UUID quizId, @RequestBody QuizQuestionsRequest request) {
