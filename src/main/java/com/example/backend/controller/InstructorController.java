@@ -18,6 +18,7 @@ import com.example.backend.dto.response.enrollment.BatchEnrollmentResponse;
 import com.example.backend.dto.response.pagination.PaginationResponse;
 import com.example.backend.dto.response.statistics.PerformanceReportItem;
 import com.example.backend.dto.response.payos.PayOSConfigResponse;
+import com.example.backend.dto.request.payos.UpdatePayOSConfigRequest;
 import com.example.backend.dto.response.statistics.RevenueOverTimeResponse;
 import com.example.backend.dto.response.quiz.QuizSubmissionResponse;
 import com.example.backend.dto.response.statistics.InstructorStatsResponse;
@@ -132,6 +133,12 @@ public class InstructorController {
         return ResponseEntity.ok(lessonService.updateLesson(lessonId, request));
     }
 
+    @GetMapping("/lessons/{lessonId}")
+    @Operation(summary = "Get lesson by ID for instructor", description = "Instructor gets their lesson details.")
+    public ResponseEntity<LessonDto> getLessonByIdForInstructor(@PathVariable UUID lessonId) {
+        return ResponseEntity.ok(lessonService.getLessonByIdForInstructor(lessonId));
+    }
+    
     @DeleteMapping("/lessons/{lessonId}")
     public ResponseEntity<Void> deleteLesson(@PathVariable UUID lessonId) {
         lessonService.deleteLesson(lessonId);
@@ -199,6 +206,13 @@ public class InstructorController {
     @Operation(summary = "Update question", description = "Instructor updates a quiz question")
     public ResponseEntity<Void> updateQuestion(@PathVariable UUID questionId, @RequestBody QuizQuestionRequest request) {
         quizService.updateQuestion(questionId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/questions/{questionId}")
+    @Operation(summary = "Delete question", description = "Instructor deletes a quiz question")
+    public ResponseEntity<Void> deleteQuestion(@PathVariable UUID questionId) {
+        quizService.deleteQuestion(questionId);
         return ResponseEntity.noContent().build();
     }
 
@@ -313,5 +327,12 @@ public class InstructorController {
     public ResponseEntity<PaginationResponse<JobDto>> getMyJobs(Pageable pageable) {
         Page<JobDto> jobs = jobService.getMyJobs(pageable);
         return ResponseEntity.ok(new PaginationResponse<>(jobs));
+    }
+
+    @PutMapping("/payos-configs/{configId}")
+    @Operation(summary = "Update PayOS configuration", description = "Update an existing PayOS configuration for the current instructor")
+    public ResponseEntity<PayOSConfigResponse> updatePayOSConfig(@PathVariable UUID configId, @RequestBody UpdatePayOSConfigRequest request) {
+        PayOSConfigResponse response = payOSConfigService.updatePayOSConfig(configId, request);
+        return ResponseEntity.ok(response);
     }
 }
