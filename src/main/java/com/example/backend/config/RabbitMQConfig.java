@@ -76,38 +76,6 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(deadLetterQueue).to(deadLetterExchange).with(DLQ_ROUTING_KEY);
     }
 
-    // Transcription Queue configuration
-    @Bean
-    public Queue transcriptionQueue() {
-        return QueueBuilder.durable(TRANSCRIPTION_QUEUE_NAME)
-                .withArgument("x-dead-letter-exchange", TRANSCRIPTION_DLX_NAME)
-                .withArgument("x-dead-letter-routing-key", TRANSCRIPTION_DLQ_ROUTING_KEY)
-                .build();
-    }
-
-    @Bean
-    public Binding transcriptionBinding(Queue transcriptionQueue, TopicExchange exchange) {
-        // Bind transcription_queue vào transcoding_exchange với routing key video.transcoding.request
-        return BindingBuilder.bind(transcriptionQueue).to(exchange).with(ROUTING_KEY);
-    }
-
-    @Bean
-    public TopicExchange transcriptionDeadLetterExchange() {
-        return new TopicExchange(TRANSCRIPTION_DLX_NAME);
-    }
-
-    @Bean
-    public Queue transcriptionDeadLetterQueue() {
-        return new Queue(TRANSCRIPTION_DLQ_NAME, true);
-    }
-
-    @Bean
-    public Binding transcriptionDeadLetterBinding(Queue transcriptionDeadLetterQueue, TopicExchange transcriptionDeadLetterExchange) {
-        return BindingBuilder.bind(transcriptionDeadLetterQueue)
-                .to(transcriptionDeadLetterExchange)
-                .with(TRANSCRIPTION_DLQ_ROUTING_KEY);
-    }
-
     @Bean
     public RabbitTemplate rabbitTemplate(final ConnectionFactory connectionFactory) {
         final RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
