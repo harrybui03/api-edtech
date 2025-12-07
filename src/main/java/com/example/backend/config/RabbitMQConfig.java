@@ -34,10 +34,6 @@ public class RabbitMQConfig {
     public static final String TRANSCRIPTION_DLQ_NAME = "transcription_queue_dlq";
     public static final String TRANSCRIPTION_DLQ_ROUTING_KEY = "dlq.video.transcoding.request";
 
-    // Transcription routing
-    public static final String TRANSCRIPTION_EXCHANGE = "transcription_exchange";
-    public static final String TRANSCRIPTION_ROUTING_KEY = "audio.transcription.request";
-
     @Bean
     public Queue queue() {
         return QueueBuilder.durable(QUEUE_NAME)
