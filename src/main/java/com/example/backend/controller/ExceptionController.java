@@ -42,6 +42,12 @@ public class ExceptionController {
         return ApiErrorBuilder.buildApiErrorResponse(exception, Status.FORBIDDEN);
     }
 
+    @ExceptionHandler({UnauthorizedException.class})
+    public  ResponseEntity<ApiError> handleUnauthorizedException(UnauthorizedException exception) {
+        logException(exception);
+        return ApiErrorBuilder.buildApiErrorResponse(exception, Status.UNAUTHORIZED);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGenericException(Exception exception) {
         logException(exception);

@@ -25,15 +25,8 @@ public class LessonMapper {
         dto.setSlug(lesson.getSlug());
         dto.setContent(lesson.getContent());
         dto.setQuizDto(QuizMapper.toDto(lesson.getQuiz()));
-
-
-        if (StringUtils.hasText(lesson.getVideoUrl())) {
-            dto.setVideoUrl(fileUploadService.generatePresignedGetUrl(lesson.getVideoUrl()));
-        }
-
-        if (StringUtils.hasText(lesson.getFileUrl())) {
-            dto.setFileUrl(fileUploadService.generatePresignedGetUrl(lesson.getFileUrl()));
-        }
+        dto.setVideoUrl(lesson.getVideoUrl());
+        dto.setFileUrl(lesson.getFileUrl());
 
         dto.setPosition(lesson.getPosition());
         return dto;

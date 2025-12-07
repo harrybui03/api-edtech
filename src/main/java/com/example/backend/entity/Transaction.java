@@ -1,5 +1,6 @@
 package com.example.backend.entity;
 
+import com.example.backend.constant.TransactionStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -88,11 +89,4 @@ public class Transaction {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
-
-    public enum TransactionStatus {
-        PENDING,
-        PAID,
-        FAILED,
-        CANCELLED
-    }
 }
