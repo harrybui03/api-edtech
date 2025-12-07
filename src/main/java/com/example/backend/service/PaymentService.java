@@ -1,5 +1,6 @@
 package com.example.backend.service;
 
+import com.example.backend.constant.TransactionStatus;
 import com.example.backend.dto.response.payment.PaymentResponse;
 import com.example.backend.dto.response.payment.TransactionListResponse;
 import com.example.backend.entity.*;
@@ -118,7 +119,7 @@ public class PaymentService {
                 .course(course)
                 .amount(course.getSellingPrice())
                 .currency(course.getCurrency() != null ? course.getCurrency() : "VND")
-                .status(Transaction.TransactionStatus.PENDING)
+                .status(TransactionStatus.PENDING)
                 .description("Payment for course: " + course.getTitle())
                 .accountNumber(payOSConfig.getAccountNumber())
                 .webhookReceived(false)
@@ -202,7 +203,7 @@ public class PaymentService {
                 .batch(batch)
                 .amount(batch.getSellingPrice())
                 .currency("VND")
-                .status(Transaction.TransactionStatus.PENDING)
+                .status(TransactionStatus.PENDING)
                 .description("Payment for batch: " + batch.getTitle())
                 .accountNumber(payOSConfig.getAccountNumber())
                 .webhookReceived(false)
@@ -276,7 +277,7 @@ public class PaymentService {
                     .orElseThrow(() -> new DataNotFoundException("Not Found"));
 
             if ("00".equals(sdkCode)) {
-                transaction.setStatus(Transaction.TransactionStatus.PAID);
+                transaction.setStatus(TransactionStatus.PAID);
                 transaction.setPaidAt(OffsetDateTime.now());
                 if (transaction.getCourse() != null) {
                     enrollmentService.createEnrollment(transaction.getStudent().getId(), transaction.getCourse().getId());
@@ -286,7 +287,7 @@ public class PaymentService {
                 }
                 sendPaymentSuccessNotifications(transaction);
             } else {
-                transaction.setStatus(Transaction.TransactionStatus.FAILED);
+                transaction.setStatus(TransactionStatus.FAILED);
                 transaction.setFailedAt(OffsetDateTime.now());
                 sendPaymentFailureNotification(transaction);
             }
@@ -311,14 +312,14 @@ public class PaymentService {
 
         if ("student".equals(userType)) {
             if (status != null) {
-                Transaction.TransactionStatus transactionStatus = Transaction.TransactionStatus.valueOf(status.toUpperCase());
+                TransactionStatus transactionStatus = TransactionStatus.valueOf(status.toUpperCase());
                 transactionPage = transactionRepository.findByStudentIdAndStatus(userId, transactionStatus, pageable);
             } else {
                 transactionPage = transactionRepository.findByStudentId(userId, pageable);
             }
         } else if ("instructor".equals(userType)) {
             if (status != null) {
-                Transaction.TransactionStatus transactionStatus = Transaction.TransactionStatus.valueOf(status.toUpperCase());
+                TransactionStatus transactionStatus = TransactionStatus.valueOf(status.toUpperCase());
                 transactionPage = transactionRepository.findByInstructorIdAndStatus(userId, transactionStatus, pageable);
             } else {
                 transactionPage = transactionRepository.findByInstructorId(userId, pageable);
@@ -326,7 +327,7 @@ public class PaymentService {
         } else {
             // Admin view - all transactions
             if (status != null) {
-                Transaction.TransactionStatus transactionStatus = Transaction.TransactionStatus.valueOf(status.toUpperCase());
+                TransactionStatus transactionStatus = TransactionStatus.valueOf(status.toUpperCase());
                 transactionPage = transactionRepository.findByStatus(transactionStatus, pageable);
             } else {
                 transactionPage = transactionRepository.findAll(pageable);

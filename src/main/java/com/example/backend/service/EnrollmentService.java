@@ -3,6 +3,7 @@ package com.example.backend.service;
 import com.example.backend.constant.CourseStatus;
 import com.example.backend.constant.EnrollmentMemberType;
 import com.example.backend.constant.EnrollmentRole;
+import com.example.backend.constant.TransactionStatus;
 import com.example.backend.dto.request.enrollment.CurrentEnrollmentRequest;
 import com.example.backend.dto.response.enrollment.CurrentEnrollmentResponse;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
@@ -157,7 +158,7 @@ public class EnrollmentService {
         if (currentEnrollmentRequest.getFilterBy().equals(CurrentEnrollmentRequest.FilterBy.BATCH)) {
             // Paid batch enrollments from transactions
             List<Transaction> batchTransactions = transactionRepository
-                    .findByStudentIdAndStatus(student.getId(), Transaction.TransactionStatus.PAID, Pageable.unpaged())
+                    .findByStudentIdAndStatus(student.getId(), TransactionStatus.PAID, Pageable.unpaged())
                     .getContent()
                     .stream()
                     .filter(t -> t.getBatch() != null)
@@ -193,7 +194,7 @@ public class EnrollmentService {
         } else {
             // Paid course enrollments from transactions
             List<Transaction> courseTransactions = transactionRepository
-                    .findByStudentIdAndStatus(student.getId(), Transaction.TransactionStatus.PAID, Pageable.unpaged())
+                    .findByStudentIdAndStatus(student.getId(), TransactionStatus.PAID, Pageable.unpaged())
                     .getContent()
                     .stream()
                     .filter(t -> t.getCourse() != null)

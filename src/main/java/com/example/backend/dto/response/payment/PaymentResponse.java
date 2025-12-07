@@ -1,6 +1,6 @@
 package com.example.backend.dto.response.payment;
 
-import com.example.backend.entity.Transaction;
+import com.example.backend.constant.TransactionStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,7 +32,7 @@ public class PaymentResponse {
     private String accountNumber;
     private BigDecimal amount;
     private String currency;
-    private Transaction.TransactionStatus status;
+    private TransactionStatus status;
     private String description;
     private String returnUrl;
     private String cancelUrl;

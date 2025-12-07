@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserMapper {
 
-    private final FileUploadService fileUploadService;
     private final UserRoleMapper userRoleMapper;
 
     public UserDTO toUserDTO(User user) {
@@ -29,10 +28,7 @@ public class UserMapper {
         userDTO.setUserType(user.getUserType());
         userDTO.setLastActive(user.getLastActive());
         userDTO.setRoles(user.getRoles().stream().map(userRoleMapper::toUserRoleDTO).collect(Collectors.toSet()));
-
-        if (StringUtils.hasText(user.getUserImage())) {
-            userDTO.setUserImage(fileUploadService.generatePresignedGetUrl(user.getUserImage()));
-        }
+        userDTO.setUserImage(user.getUserImage());
         return userDTO;
     }
 }

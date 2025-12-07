@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: backend
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: public
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: scheduleaiagent26@gmail.com
+    password: ${SPRING_MAIL_PASSWORD_STAGING}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL_STAGING}
+    username: ${SPRING_DATASOURCE_USERNAME_STAGING}
+    password: ${SPRING_DATASOURCE_PASSWORD_STAGING}
+    driver-class-name: org.postgresql.Driver
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST_STAGING}
+    port: 5672
+    username: ${SPRING_RABBITMQ_USERNAME_STAGING}
+    password: ${SPRING_RABBITMQ_PASSWORD_STAGING}
+  servlet:
+    multipart:
+      max-file-size: 2GB
+      max-request-size: 2GB
+app:
+  jwt-secret: ${APP_JWT_SECRET_STAGING}
+  jwt-expiration-milliseconds: 30000000
+  jwt-refresh-expiration-milliseconds: 3000000000
+  base-url: http://staging.example.com
+  cors:
+    allowed-origins: http://staging.frontend.com
+server:
+  servlet:
+    context-path: /api/v1
+  port: 8000
+springdoc:
+  override-with-generic-response: false
+minio:
+  url: http://minio.staging:9000
+  access:
+    key: ${MINIO_ACCESS_KEY_STAGING}
+    secret: ${MINIO_ACCESS_SECRET_STAGING}
+  bucket:
+    name: edtech-content-staging
+janus:
+  server:
+    url: ${JANUS_SERVER_URL_STAGING}
