@@ -307,4 +307,11 @@ public class InstructorController {
         PayOSConfigResponse response = payOSConfigService.getMyPayOSConfig();
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/my-jobs")
+    @Operation(summary = "Get my jobs", description = "Instructor gets a paginated list of their created jobs (e.g., video transcoding).")
+    public ResponseEntity<PaginationResponse<JobDto>> getMyJobs(Pageable pageable) {
+        Page<JobDto> jobs = jobService.getMyJobs(pageable);
+        return ResponseEntity.ok(new PaginationResponse<>(jobs));
+    }
 }
