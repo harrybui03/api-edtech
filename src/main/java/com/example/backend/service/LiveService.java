@@ -271,12 +271,11 @@ public class LiveService {
         // Join room with camera handle
         String displayName = currentUser.getFullName();
         
-        // 🔥 IMPROVED: Get existing feedIds BEFORE join to accurately detect the new one
+        // Get existing feedIds BEFORE join to accurately detect the new one
         java.util.Set<Long> existingFeedIds = getCurrentFeedIds(request.getRoomId());
         
         janusService.joinRoom(sessionId, cameraHandleId, request.getRoomId(), "publisher", displayName);
         
-        // 🔥 Poll for NEW feedId (not in existingFeedIds) to avoid matching wrong user with same name
         Long cameraFeedId = pollForNewFeedId(request.getRoomId(), displayName, existingFeedIds, 5000);
         
         if (cameraFeedId == null) {
@@ -306,7 +305,7 @@ public class LiveService {
         
         // If publish successful, save camera feed to database
         if (sdpAnswer != null && janusResponse.getError() == null) {
-            // 🔥 Use feedId from join response (not from publish response!)
+            // Use feedId from join response (not from publish response!)
             Long actualFeedId = cameraFeedId;
             
             // Save camera feed to database (active immediately after publish)
@@ -323,7 +322,7 @@ public class LiveService {
             
             participantFeedRepository.save(cameraFeed);
         } else {
-            // 🔥 Cleanup: Publish failed, detach handle to avoid orphaned publisher in Janus
+            // Cleanup: Publish failed, detach handle to avoid orphaned publisher in Janus
             try {
                 janusService.detachPlugin(sessionId, cameraHandleId);
             } catch (Exception e) {
@@ -408,12 +407,12 @@ public class LiveService {
         // Join room with screen handle
         String displayName = currentUser.getFullName() + " (Screen)";
         
-        // 🔥 IMPROVED: Get existing feedIds BEFORE join to accurately detect the new one
+        // Get existing feedIds BEFORE join to accurately detect the new one
         java.util.Set<Long> existingFeedIds = getCurrentFeedIds(request.getRoomId());
         
         janusService.joinRoom(sessionId, screenHandleId, request.getRoomId(), "publisher", displayName);
         
-        // 🔥 Poll for NEW feedId (not in existingFeedIds) to avoid matching wrong user
+        // Poll for NEW feedId (not in existingFeedIds) to avoid matching wrong user
         Long screenFeedId = pollForNewFeedId(request.getRoomId(), displayName, existingFeedIds, 5000);
         
         if (screenFeedId == null) {
@@ -443,7 +442,7 @@ public class LiveService {
         
         // If publish successful, save screen feed to database
         if (sdpAnswer != null && janusResponse.getError() == null) {
-            // 🔥 Use feedId from join response (not from publish response!)
+            // Use feedId from join response (not from publish response!)
             Long actualFeedId = screenFeedId;
             
             // Save screen share feed to database (active after successful publish)
@@ -459,7 +458,7 @@ public class LiveService {
                     .build();
             participantFeedRepository.save(screenFeed);
         } else {
-            // 🔥 Cleanup: Publish failed, detach handle to avoid orphaned publisher in Janus
+            // Publish failed, detach handle to avoid orphaned publisher in Janus
             try {
                 janusService.detachPlugin(sessionId, screenHandleId);
             } catch (Exception e) {
@@ -505,7 +504,7 @@ public class LiveService {
             unpublishResponse.setError("Unpublish failed: " + e.getMessage());
         }
         
-        // 🔥 Always detach handle to cleanup resources (even if unpublish failed)
+        // Always detach handle to cleanup resources (even if unpublish failed)
         try {
             janusService.detachPlugin(sessionId, handleId);
         } catch (Exception e) {
@@ -550,7 +549,7 @@ public class LiveService {
             unpublishResponse.setError("Unpublish failed: " + e.getMessage());
         }
         
-        // 🔥 Always detach handle to cleanup resources
+        // Always detach handle to cleanup resources
         try {
             janusService.detachPlugin(sessionId, handleId);
         } catch (Exception e) {
@@ -583,7 +582,7 @@ public class LiveService {
             throw new ForbiddenException("Only the instructor who started the session can kick participants");
         }
         
-        // 🔥 Find the user being kicked by their feed ID
+        // Find the user being kicked by their feed ID
         // The participantId in the request is actually a feed ID from Janus
         ParticipantFeed kickedFeed = participantFeedRepository.findByFeedIdAndRoomId(
                 request.getParticipantId(), 
@@ -593,7 +592,7 @@ public class LiveService {
         
         User kickedUser = kickedFeed.getUser();
         
-        // 🔥 Find and destroy user's main session
+        // Find and destroy user's main session
         ParticipantSession userSession = participantSessionRepository
                 .findByUserAndRoomIdAndIsActiveTrue(kickedUser, request.getRoomId())
                 .orElse(null);
@@ -686,7 +685,7 @@ public class LiveService {
         liveSessionRepository.findByRoomId(request.getRoomId())
                 .orElseThrow(() -> new DataNotFoundException("Live session not found with room ID: " + request.getRoomId()));
         
-        // 🔥 Get or create user's main session (reuse architecture!)
+        // Get or create user's main session (reuse architecture!)
         ParticipantSession participantSession = participantSessionRepository
                 .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId())
                 .orElseGet(() -> {
@@ -715,7 +714,7 @@ public class LiveService {
         
         Long sessionId = participantSession.getJanusSessionId();
         
-        // 🔥 Create new handle for subscribing to this feed (on existing session)
+        // Create new handle for subscribing to this feed (on existing session)
         JanusResponse attachResponse = janusService.attachPlugin(sessionId);
         Long handleId = attachResponse.getData() != null 
                 ? ((Number) attachResponse.getData().get("id")).longValue() 
@@ -827,7 +826,7 @@ public class LiveService {
             throw new IllegalStateException("Live session is not published");
         }
         
-        // 🔥 Destroy ALL participant sessions in this room
+        // Destroy ALL participant sessions in this room
         List<ParticipantSession> activeSessions = participantSessionRepository
                 .findByRoomIdAndIsActiveTrue(roomId);
         
@@ -987,7 +986,6 @@ public class LiveService {
     /**
      * Poll Janus listParticipants to get feedId for a newly joined publisher
      * 
-     * IMPROVED: Instead of matching by displayName (which can be duplicated),
      * we compare feedIds before and after join to find the new one.
      * 
      * @param roomId The room ID
