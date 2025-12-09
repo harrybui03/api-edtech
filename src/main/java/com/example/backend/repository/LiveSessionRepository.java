@@ -21,5 +21,8 @@ public interface LiveSessionRepository extends JpaRepository<LiveSession, UUID> 
     
     @Query("SELECT ls FROM LiveSession ls WHERE ls.janusSessionId = :sessionId")
     Optional<LiveSession> findByJanusSessionId(@Param("sessionId") Long sessionId);
+    
+    @Query("SELECT ls FROM LiveSession ls WHERE ls.batch.id = :batchId AND ls.recordingStatus = 'COMPLETED' ORDER BY ls.startedAt DESC")
+    List<LiveSession> findCompletedRecordingsByBatchId(@Param("batchId") UUID batchId);
 }
 

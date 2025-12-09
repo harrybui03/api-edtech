@@ -10,12 +10,14 @@ import com.example.backend.entity.User;
 import com.example.backend.excecption.DataNotFoundException;
 import com.example.backend.excecption.ForbiddenException;
 import com.example.backend.mapper.LiveSessionMapper;
+import com.example.backend.repository.BatchEnrollmentRepository;
 import com.example.backend.repository.BatchRepository;
 import com.example.backend.repository.LiveSessionRepository;
 import com.example.backend.repository.ParticipantFeedRepository;
 import com.example.backend.repository.ParticipantSessionRepository;
 import com.example.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,10 +29,13 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class LiveService {
     
     private final JanusService janusService;
@@ -40,6 +45,7 @@ public class LiveService {
     private final LiveSessionMapper liveSessionMapper;
     private final ParticipantFeedRepository participantFeedRepository;
     private final ParticipantSessionRepository participantSessionRepository;
+    private final BatchEnrollmentRepository batchEnrollmentRepository;
     
     private final Random random = new Random();
 
@@ -940,6 +946,74 @@ public class LiveService {
         return RoomParticipantResponse.builder()
                 .roomId(roomId)
                 .participants(participantInfos)
+                .build();
+    }
+    
+    /**
+     * Get all batches that current user has enrolled
+     * Returns list of batches with id, slug, title, startTime, endTime
+     */
+    @Transactional(readOnly = true)
+    public List<EnrolledBatchResponse> getEnrolledBatches() {
+        User currentUser = getCurrentUser();
+        
+        List<Batch> enrolledBatches = batchEnrollmentRepository.findBatchesByUserId(currentUser.getId());
+        
+        return enrolledBatches.stream()
+                .map(batch -> EnrolledBatchResponse.builder()
+                        .id(batch.getId())
+                        .slug(batch.getSlug())
+                        .title(batch.getTitle())
+                        .startTime(batch.getStartTime())
+                        .endTime(batch.getEndTime())
+                        .build())
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get all completed recordings of a batch
+     * Returns list of recordings with objectName (frontend will get presigned URL via /uploads/get-url)
+     */
+    @Transactional(readOnly = true)
+    public BatchRecordingsResponse getBatchRecordings(UUID batchId) {
+        User currentUser = getCurrentUser();
+        
+        // Validate batch exists
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new DataNotFoundException("Batch not found with id: " + batchId));
+        
+        // Check if user is enrolled in batch or is an instructor
+        boolean isInstructor = batch.getInstructors().stream()
+                .anyMatch(bi -> bi.getInstructor().getId().equals(currentUser.getId()));
+        boolean isEnrolled = batchEnrollmentRepository.existsByUserIdAndBatchId(currentUser.getId(), batchId);
+        
+        if (!isInstructor && !isEnrolled) {
+            throw new ForbiddenException("You are not authorized to view recordings for this batch");
+        }
+        
+        // Get all completed recordings for this batch
+        List<LiveSession> completedSessions = liveSessionRepository.findCompletedRecordingsByBatchId(batchId);
+        
+        List<BatchRecordingsResponse.RecordingInfo> recordings = completedSessions.stream()
+                .map(session -> BatchRecordingsResponse.RecordingInfo.builder()
+                        .sessionId(session.getId())
+                        .roomId(session.getRoomId())
+                        .title(session.getTitle())
+                        .description(session.getDescription())
+                        .objectName(session.getFinalVideoObjectName())
+                        .durationSeconds(session.getRecordingDuration())
+                        .recordedAt(session.getStartedAt())
+                        .instructorName(session.getInstructor() != null 
+                                ? session.getInstructor().getFullName() 
+                                : null)
+                        .build())
+                .collect(Collectors.toList());
+        
+        return BatchRecordingsResponse.builder()
+                .batchId(batch.getId())
+                .batchTitle(batch.getTitle())
+                .batchSlug(batch.getSlug())
+                .recordings(recordings)
                 .build();
     }
     
