@@ -157,7 +157,7 @@ public class LiveService {
             throw new RuntimeException("Failed to create Janus session");
         }
         
-        // 🔥 Attach plugin to get a handle for joining room
+        // Attach plugin to get a handle for joining room
         JanusResponse attachResponse = janusService.attachPlugin(sessionId);
         Long handleId = attachResponse.getData() != null 
                 ? ((Number) attachResponse.getData().get("id")).longValue() 
@@ -167,7 +167,7 @@ public class LiveService {
             throw new RuntimeException("Failed to attach plugin");
         }
         
-        // 🔥 Join room as publisher (all users join as publisher)
+        // Join room as publisher (all users join as publisher)
         String displayName = (request.getDisplayName() != null && !request.getDisplayName().trim().isEmpty())
                 ? request.getDisplayName().trim()
                 : currentUser.getFullName();
@@ -228,7 +228,7 @@ public class LiveService {
             throw new IllegalStateException("User already has an active camera stream in this room. Please unpublish first.");
         }
         
-        // 🔥 Get or create user's main session
+        // Get or create user's main session
         ParticipantSession participantSession = participantSessionRepository
                 .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId())
                 .orElseGet(() -> {
@@ -258,7 +258,7 @@ public class LiveService {
         
         Long sessionId = participantSession.getJanusSessionId();
         
-        // 🔥 Create NEW handle for camera on existing session
+        // Create NEW handle for camera on existing session
         JanusResponse attachResponse = janusService.attachPlugin(sessionId);
         Long cameraHandleId = attachResponse.getData() != null 
                 ? ((Number) attachResponse.getData().get("id")).longValue() 
@@ -364,7 +364,7 @@ public class LiveService {
             throw new IllegalStateException("User already has an active screen share in this room. Please stop sharing first.");
         }
         
-        // 🔥 Get or create user's main session
+        // Get or create user's main session
         ParticipantSession participantSession = participantSessionRepository
                 .findByUserAndRoomIdAndIsActiveTrue(currentUser, request.getRoomId())
                 .orElseGet(() -> {
@@ -394,7 +394,7 @@ public class LiveService {
         
         Long sessionId = participantSession.getJanusSessionId();
         
-        // 🔥 Create NEW handle for screen on existing session
+        // Create NEW handle for screen on existing session
         JanusResponse attachResponse = janusService.attachPlugin(sessionId);
         Long screenHandleId = attachResponse.getData() != null 
                 ? ((Number) attachResponse.getData().get("id")).longValue() 
