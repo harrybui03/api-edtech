@@ -27,7 +27,7 @@ public class LiveController {
     private final ChunkRecordingService chunkRecordingService;
     
     /**
-     * Bắt đầu live streaming
+     * Start live streaming
      */
     @PostMapping("/start")
     @PreAuthorize("hasRole('COURSE_CREATOR')")
@@ -70,20 +70,20 @@ public class LiveController {
     /**
      * Unpublish stream (camera/microphone)
      */
-    @PostMapping("/unpublish/{roomId}")
-    @Operation(summary = "Unpublish stream", description = "Stop publishing camera/microphone stream")
-    public ResponseEntity<JanusResponse> unpublishStream(@PathVariable Long roomId) {
-        JanusResponse response = liveService.unpublishStream(roomId);
+    @PostMapping("/unpublish")
+    @Operation(summary = "Unpublish stream", description = "Stop publishing camera/microphone stream. Requires sessionId and handleId.")
+    public ResponseEntity<JanusResponse> unpublishStream(@Valid @RequestBody UnpublishRequest request) {
+        JanusResponse response = liveService.unpublishStream(request);
         return ResponseEntity.ok(response);
     }
     
     /**
      * Unpublish screen share stream
      */
-    @PostMapping("/unpublish-screen/{roomId}")
-    @Operation(summary = "Unpublish screen share", description = "Stop publishing screen share stream independently from camera")
-    public ResponseEntity<JanusResponse> unpublishScreenShare(@PathVariable Long roomId) {
-        JanusResponse response = liveService.unpublishScreenShare(roomId);
+    @PostMapping("/unpublish-screen")
+    @Operation(summary = "Unpublish screen share", description = "Stop publishing screen share stream independently from camera. Requires sessionId and handleId.")
+    public ResponseEntity<JanusResponse> unpublishScreenShare(@Valid @RequestBody UnpublishRequest request) {
+        JanusResponse response = liveService.unpublishScreenShare(request);
         return ResponseEntity.ok(response);
     }
     
@@ -128,7 +128,7 @@ public class LiveController {
     
     /**
      * List participants (publishers) in room
-     * Subscriber dùng để lấy danh sách publishers và feed IDs
+     * Subscriber use to get list of publishers and feed IDs
      */
     @GetMapping("/participants-feeds/{roomId}")
     @Operation(summary = "List participants", description = "Get list of all participants (publishers) in a live session. Returns feed IDs for subscribers. Use excludeFeedId to filter out your own stream.")
@@ -141,7 +141,7 @@ public class LiveController {
     
     /**
      * Subscribe to a publisher's stream
-     * Step 1: Configure subscriber - Janus trả về SDP offer
+     * Step 1: Configure subscriber - Janus returns SDP offer
      */
     @PostMapping("/subscribe")
     @Operation(summary = "Subscribe to stream", description = "Subscribe to a publisher's stream. Returns SDP offer that subscriber needs to create answer from.")
@@ -183,7 +183,7 @@ public class LiveController {
 
     /**
      * Get list of participants in a room from participant_sessions
-     * Trả ra userId và tên lúc join phòng để tiện cho việc kick
+     * Return userId and join display name for easy kick
      */
     @GetMapping("/participants-names/{roomId}")
     @Operation(summary = "Get room participants", description = "Get list of participants in a room with userId and join display name")
