@@ -150,6 +150,7 @@ public class LiveService {
             JanusResponse response = new JanusResponse();
             response.setSessionId(existingSession.get().getJanusSessionId());
             response.setJanus("success");
+            response.setLiveSessionId(liveSession.getId());
             return response;
         }
         
@@ -206,6 +207,7 @@ public class LiveService {
         // Return full response with sessionId and handleId
         joinResponse.setSessionId(sessionId);
         joinResponse.setHandleId(handleId);
+        joinResponse.setLiveSessionId(liveSession.getId());
         
         return joinResponse;
     }
@@ -947,27 +949,6 @@ public class LiveService {
                 .roomId(roomId)
                 .participants(participantInfos)
                 .build();
-    }
-    
-    /**
-     * Get all batches that current user has enrolled
-     * Returns list of batches with id, slug, title, startTime, endTime
-     */
-    @Transactional(readOnly = true)
-    public List<EnrolledBatchResponse> getEnrolledBatches() {
-        User currentUser = getCurrentUser();
-        
-        List<Batch> enrolledBatches = batchEnrollmentRepository.findBatchesByUserId(currentUser.getId());
-        
-        return enrolledBatches.stream()
-                .map(batch -> EnrolledBatchResponse.builder()
-                        .id(batch.getId())
-                        .slug(batch.getSlug())
-                        .title(batch.getTitle())
-                        .startTime(batch.getStartTime())
-                        .endTime(batch.getEndTime())
-                        .build())
-                .collect(Collectors.toList());
     }
     
     /**

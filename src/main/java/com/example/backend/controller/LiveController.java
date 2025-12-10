@@ -16,7 +16,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -192,18 +191,6 @@ public class LiveController {
     @Operation(summary = "Get room participants", description = "Get list of participants in a room with userId and join display name")
     public ResponseEntity<RoomParticipantResponse> getRoomParticipants(@PathVariable Long roomId) {
         RoomParticipantResponse response = liveService.getRoomParticipants(roomId);
-        return ResponseEntity.ok(response);
-    }
-    
-    // ==================== Batch & Enrollment Endpoints ====================
-    
-    /**
-     * Get all batches that current user has enrolled
-     */
-    @GetMapping("/enrolled-batches")
-    @Operation(summary = "Get enrolled batches", description = "Get all batches that the current user has enrolled in. Returns id, slug, title, startTime, endTime for each batch.")
-    public ResponseEntity<List<EnrolledBatchResponse>> getEnrolledBatches() {
-        List<EnrolledBatchResponse> response = liveService.getEnrolledBatches();
         return ResponseEntity.ok(response);
     }
     
