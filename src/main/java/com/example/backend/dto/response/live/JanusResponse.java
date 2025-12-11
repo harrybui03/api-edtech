@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -22,6 +23,8 @@ public class JanusResponse {
     private Long sessionId;
     
     private Long handleId;
+    
+    private UUID liveSessionId;
     
     private Map<String, Object> plugindata;
     

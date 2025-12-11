@@ -16,6 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/live")
 @RequiredArgsConstructor
@@ -189,6 +191,16 @@ public class LiveController {
     @Operation(summary = "Get room participants", description = "Get list of participants in a room with userId and join display name")
     public ResponseEntity<RoomParticipantResponse> getRoomParticipants(@PathVariable Long roomId) {
         RoomParticipantResponse response = liveService.getRoomParticipants(roomId);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Get all recordings of a batch
+     */
+    @GetMapping("/batches/{batchId}/recordings")
+    @Operation(summary = "Get batch recordings", description = "Get all completed recordings of a batch. User must be enrolled in the batch or be an instructor.")
+    public ResponseEntity<BatchRecordingsResponse> getBatchRecordings(@PathVariable UUID batchId) {
+        BatchRecordingsResponse response = liveService.getBatchRecordings(batchId);
         return ResponseEntity.ok(response);
     }
     
