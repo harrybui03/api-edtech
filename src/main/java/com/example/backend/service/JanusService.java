@@ -13,6 +13,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class JanusService {
     
     private final RestTemplate restTemplate;
@@ -28,6 +29,8 @@ public class JanusService {
         request.put("janus", "create");
         request.put("transaction", generateTransactionId());
         
+        log.debug("Creating Janus session...");
+        
         try {
             @SuppressWarnings("rawtypes")
             ResponseEntity<Map> response = restTemplate.postForEntity(
@@ -38,8 +41,12 @@ public class JanusService {
             
             @SuppressWarnings("unchecked")
             Map<String, Object> body = response.getBody();
-            return mapToJanusResponse(body);
+            JanusResponse result = mapToJanusResponse(body);
+            
+            log.info("Janus session created: {}", result.getSessionId());
+            return result;
         } catch (Exception e) {
+            log.error("Failed to create Janus session", e);
             throw new InternalServerError("Failed to create Janus session: " + e.getMessage());
         }
     }
@@ -169,6 +176,9 @@ public class JanusService {
      * Publish stream
      */
     public JanusResponse publishStream(Long sessionId, Long handleId, String sdp) {
+        log.info("Publishing stream: session={}, handle={}", sessionId, handleId);
+        log.debug("SDP offer length: {}", sdp != null ? sdp.length() : 0);
+        
         Map<String, Object> body = new HashMap<>();
         body.put("request", "publish");
         
@@ -199,76 +209,131 @@ public class JanusService {
             // If we got ACK, need to wait for event with JSEP
             // For REST API, we can't easily get the event, so we need to poll or use long-polling
             if ("ack".equals(janusResponse.getJanus())) {
-                // Try to get event (with retry and longer timeout)
+                // Try to get event (with retry)
                 try {
-                    // Retry up to 10 times with 300ms between each (total ~3 seconds)
-                    for (int attempt = 0; attempt < 10; attempt++) {
-                        Thread.sleep(300); // Wait 300ms for Janus to process
+                    // Poll up to 30 times with 1 second between each (total ~30 seconds max)
+                    // Janus events usually arrive within 1-3 seconds
+                    outerLoop:
+                    for (int attempt = 0; attempt < 30; attempt++) {
+                        Thread.sleep(1000); // Wait 1 second for Janus to process
                         
-                        // Make another request to get pending events
+                        // Make another request to get pending events (maxev=10 returns array)
                         @SuppressWarnings("rawtypes")
-                        ResponseEntity<Map> eventResponse = restTemplate.getForEntity(
-                            janusServerUrl + "/" + sessionId + "?maxev=1",
-                            Map.class
+                        ResponseEntity<List> eventResponse = restTemplate.getForEntity(
+                            janusServerUrl + "/" + sessionId + "?maxev=10",
+                            List.class
                         );
                         @SuppressWarnings("unchecked")
-                        Map<String, Object> eventBody = eventResponse.getBody();
+                        List<Map<String, Object>> eventList = eventResponse.getBody();
                     
-                    if (eventBody != null) {
-                        String janusType = (String) eventBody.get("janus");
-                        
-                        if ("event".equals(janusType)) {
-                            // Check if this is a relevant publish event (has JSEP or configured)
-                            boolean hasJsep = eventBody.containsKey("jsep");
-                            boolean isPublishEvent = false;
-                            
-                            if (eventBody.containsKey("plugindata")) {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> plugindata = (Map<String, Object>) eventBody.get("plugindata");
-                                if (plugindata != null && plugindata.containsKey("data")) {
-                                    @SuppressWarnings("unchecked")
-                                    Map<String, Object> data = (Map<String, Object>) plugindata.get("data");
-                                    if (data != null) {
-                                        // Check if this is a publish success event
-                                        isPublishEvent = data.containsKey("configured") || 
-                                                       data.containsKey("publishers") ||
-                                                       (data.containsKey("videoroom") && 
-                                                        "event".equals(data.get("videoroom")) && 
-                                                        !data.containsKey("unpublished") && 
-                                                        !data.containsKey("leaving"));
-                                    }
-                                }
-                            }
-                            
-                            // Only process if it's a publish event with JSEP or has error
-                            if (hasJsep || isPublishEvent) {
-                                janusResponse = mapToJanusResponse(eventBody);
-                                
-                                // Check if event contains error
-                                if (janusResponse.getPlugindata() != null) {
-                                    @SuppressWarnings("unchecked")
-                                    Map<String, Object> pluginData = (Map<String, Object>) janusResponse.getPlugindata().get("data");
-                                    if (pluginData != null && pluginData.containsKey("error_code")) {
-                                        janusResponse.setError((String) pluginData.get("error"));
-                                        janusResponse.setErrorCode(((Number) pluginData.get("error_code")).intValue());
-                                        break; // Error found, stop polling
-                                    }
-                                }
-                                
-                                if (janusResponse.getJsep() != null) {
-                                    break; // Found JSEP, stop polling
-                                }
-                            }
-                        } else if ("error".equals(janusType)) {
-                            janusResponse = mapToJanusResponse(eventBody);
-                            break; // Error, stop polling
+                        if (eventList == null || eventList.isEmpty()) {
+                            continue; // No events yet, try again
                         }
-                    }
+                        
+                        for (Map<String, Object> eventBody : eventList) {
+                            if (eventBody == null) continue;
+                            
+                            String janusType = (String) eventBody.get("janus");
+                            
+                            // Check if this event is for our handle (but don't skip sender = 0 or null)
+                            Long eventSender = null;
+                            if (eventBody.containsKey("sender")) {
+                                Object senderObj = eventBody.get("sender");
+                                if (senderObj != null) {
+                                    eventSender = ((Number) senderObj).longValue();
+                                }
+                            }
+                            
+                            // Only skip if sender is non-zero and doesn't match our handle
+                            // Accept: sender = null, sender = 0, sender = handleId
+                            if (eventSender != null && eventSender != 0 && !eventSender.equals(handleId)) {
+                                continue; // Skip this event, try next one
+                            }
+                            
+                            if ("event".equals(janusType)) {
+                                // Check if this is a relevant publish event (has JSEP or configured)
+                                boolean hasJsep = eventBody.containsKey("jsep");
+                                boolean isPublishEvent = false;
+                                boolean isUnpublishOrLeaveEvent = false;
+                                
+                                if (eventBody.containsKey("plugindata")) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> plugindata = (Map<String, Object>) eventBody.get("plugindata");
+                                    if (plugindata != null && plugindata.containsKey("data")) {
+                                        @SuppressWarnings("unchecked")
+                                        Map<String, Object> data = (Map<String, Object>) plugindata.get("data");
+                                        if (data != null) {
+                                            // Skip unpublish/leave events - they are from previous requests
+                                            isUnpublishOrLeaveEvent = data.containsKey("unpublished") || 
+                                                                       data.containsKey("leaving");
+                                            
+                                            // Check if this is a publish success event
+                                            isPublishEvent = data.containsKey("configured") || 
+                                                           data.containsKey("publishers") ||
+                                                           (data.containsKey("videoroom") && 
+                                                            "event".equals(data.get("videoroom")) && 
+                                                            !isUnpublishOrLeaveEvent);
+                                        }
+                                    }
+                                }
+                                
+                                // Skip unpublish/leave events - they are not for publish request
+                                if (isUnpublishOrLeaveEvent) {
+                                    continue; // Skip this event, try next one
+                                }
+                                
+                                // Only process if it's a publish event with JSEP
+                                if (hasJsep || isPublishEvent) {
+                                    janusResponse = mapToJanusResponse(eventBody);
+                                    
+                                    // Check if event contains error (but only for publish-related errors)
+                                    if (janusResponse.getPlugindata() != null) {
+                                        @SuppressWarnings("unchecked")
+                                        Map<String, Object> pluginData = (Map<String, Object>) janusResponse.getPlugindata().get("data");
+                                        if (pluginData != null && pluginData.containsKey("error_code")) {
+                                            int errorCode = ((Number) pluginData.get("error_code")).intValue();
+                                            // Error 435 = "Can't unpublish, not published" - skip this, it's from unpublish request
+                                            if (errorCode == 435) {
+                                                continue; // Skip this error, try next event
+                                            }
+                                            janusResponse.setError((String) pluginData.get("error"));
+                                            janusResponse.setErrorCode(errorCode);
+                                            break outerLoop; // Error found, stop polling
+                                        }
+                                    }
+                                    
+                                    if (janusResponse.getJsep() != null) {
+                                        log.info("Received SDP answer from Janus after {} attempts", attempt + 1);
+                                        break outerLoop; // Found JSEP, stop polling
+                                    }
+                                }
+                            } else if ("error".equals(janusType)) {
+                                // Check error code - skip 435 (unpublish error)
+                                if (eventBody.containsKey("error")) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> error = (Map<String, Object>) eventBody.get("error");
+                                    if (error != null && error.containsKey("code")) {
+                                        int errorCode = ((Number) error.get("code")).intValue();
+                                        if (errorCode == 435) {
+                                            continue; // Skip unpublish error, try next event
+                                        }
+                                    }
+                                }
+                                janusResponse = mapToJanusResponse(eventBody);
+                                log.warn("Janus publish error: {} (code: {})", janusResponse.getError(), janusResponse.getErrorCode());
+                                break outerLoop; // Error, stop polling
+                            }
+                        }
                     } // end of for loop
+                    
+                    if (janusResponse.getJsep() == null && janusResponse.getError() == null) {
+                        log.warn("Publish: No JSEP response received after 30 polling attempts");
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                    log.warn("Publish polling interrupted");
                 } catch (Exception e) {
-                    // Failed to get event
+                    log.error("Error polling for publish event", e);
                 }
             }
             
@@ -305,6 +370,32 @@ public class JanusService {
             return mapToJanusResponse(responseBody);
         } catch (Exception e) {
             throw new InternalServerError("Failed to unpublish stream: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Detach plugin handle (destroy handle but keep session)
+     */
+    public JanusResponse detachPlugin(Long sessionId, Long handleId) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("janus", "detach");
+        request.put("transaction", generateTransactionId());
+        
+        String url = janusServerUrl + "/" + sessionId + "/" + handleId;
+        
+        try {
+            @SuppressWarnings("rawtypes")
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    url,
+                    request,
+                    Map.class
+            );
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> responseBody = response.getBody();
+            return mapToJanusResponse(responseBody);
+        } catch (Exception e) {
+            throw new InternalServerError("Failed to detach plugin: " + e.getMessage());
         }
     }
     
@@ -377,20 +468,44 @@ public class JanusService {
             // If we got ACK, need to wait for event with SDP offer (similar to publish)
             if ("ack".equals(janusResponse.getJanus())) {
                 try {
-                    // Retry up to 3 times with 500ms between each
-                    for (int attempt = 0; attempt < 3; attempt++) {
-                        Thread.sleep(500);
+                    // Poll up to 30 times with 1 second between each (total ~30 seconds max)
+                    // Janus events usually arrive within 1-3 seconds
+                    outerLoop:
+                    for (int attempt = 0; attempt < 30; attempt++) {
+                        Thread.sleep(1000); // Wait 1 second for Janus to process
                         
+                        // maxev=10 returns array of events
                         @SuppressWarnings("rawtypes")
-                        ResponseEntity<Map> eventResponse = restTemplate.getForEntity(
-                            janusServerUrl + "/" + sessionId + "?maxev=1",
-                            Map.class
+                        ResponseEntity<List> eventResponse = restTemplate.getForEntity(
+                            janusServerUrl + "/" + sessionId + "?maxev=10",
+                            List.class
                         );
                         @SuppressWarnings("unchecked")
-                        Map<String, Object> eventBody = eventResponse.getBody();
+                        List<Map<String, Object>> eventList = eventResponse.getBody();
                     
-                        if (eventBody != null) {
+                        if (eventList == null || eventList.isEmpty()) {
+                            continue; // No events yet, try again
+                        }
+                        
+                        for (Map<String, Object> eventBody : eventList) {
+                            if (eventBody == null) continue;
+                            
                             String janusType = (String) eventBody.get("janus");
+                            
+                            // Check if this event is for our handle (but don't skip sender = 0 or null)
+                            Long eventSender = null;
+                            if (eventBody.containsKey("sender")) {
+                                Object senderObj = eventBody.get("sender");
+                                if (senderObj != null) {
+                                    eventSender = ((Number) senderObj).longValue();
+                                }
+                            }
+                            
+                            // Only skip if sender is non-zero and doesn't match our handle
+                            // Accept: sender = null, sender = 0, sender = handleId
+                            if (eventSender != null && eventSender != 0 && !eventSender.equals(handleId)) {
+                                continue; // Skip this event, try next one
+                            }
                             
                             if ("event".equals(janusType)) {
                                 janusResponse = mapToJanusResponse(eventBody);
@@ -402,16 +517,16 @@ public class JanusService {
                                     if (pluginData != null && pluginData.containsKey("error_code")) {
                                         janusResponse.setError((String) pluginData.get("error"));
                                         janusResponse.setErrorCode(((Number) pluginData.get("error_code")).intValue());
-                                        break;
+                                        break outerLoop;
                                     }
                                 }
                                 
                                 if (janusResponse.getJsep() != null) {
-                                    break; // Found JSEP, stop polling
+                                    break outerLoop; // Found JSEP, stop polling
                                 }
                             } else if ("error".equals(janusType)) {
                                 janusResponse = mapToJanusResponse(eventBody);
-                                break;
+                                break outerLoop;
                             }
                         }
                     } // end of for loop
@@ -591,6 +706,17 @@ public class JanusService {
         janusResponse.setJanus((String) responseBody.get("janus"));
         janusResponse.setTransaction((String) responseBody.get("transaction"));
         
+        // Handle session_id first (present in most responses)
+        if (responseBody.containsKey("session_id")) {
+            janusResponse.setSessionId(((Number) responseBody.get("session_id")).longValue());
+        }
+        
+        // Handle sender (handle ID in event responses)
+        if (responseBody.containsKey("sender")) {
+            janusResponse.setHandleId(((Number) responseBody.get("sender")).longValue());
+        }
+        
+        // Handle data object (contains ID for create session/attach plugin)
         if (responseBody.containsKey("data")) {
             Object dataObj = responseBody.get("data");
             if (dataObj instanceof Map) {
@@ -599,18 +725,20 @@ public class JanusService {
                 janusResponse.setData(data);
                 
                 if (data.containsKey("id")) {
-                    janusResponse.setSessionId(((Number) data.get("id")).longValue());
-                    janusResponse.setHandleId(((Number) data.get("id")).longValue());
+                    Long id = ((Number) data.get("id")).longValue();
+                    
+                    // Determine if this is session ID or handle ID based on response type
+                    // - Create session: data.id is sessionId
+                    // - Attach plugin: data.id is handleId (session_id is separate field)
+                    if (janusResponse.getSessionId() == null) {
+                        // This is a create session response - data.id is session ID
+                        janusResponse.setSessionId(id);
+                    } else {
+                        // This is an attach response - data.id is handle ID
+                        janusResponse.setHandleId(id);
+                    }
                 }
             }
-        }
-        
-        if (responseBody.containsKey("session_id")) {
-            janusResponse.setSessionId(((Number) responseBody.get("session_id")).longValue());
-        }
-        
-        if (responseBody.containsKey("sender")) {
-            janusResponse.setHandleId(((Number) responseBody.get("sender")).longValue());
         }
         
         if (responseBody.containsKey("plugindata")) {
@@ -625,11 +753,19 @@ public class JanusService {
             janusResponse.setJsep(jsep);
         }
         
+        // Handle error object - fix ClassCastException
         if (responseBody.containsKey("error")) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> error = (Map<String, Object>) responseBody.get("error");
-            janusResponse.setError((String) error.get("reason"));
-            janusResponse.setErrorCode((Integer) error.get("code"));
+            Object errorObj = responseBody.get("error");
+            if (errorObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> error = (Map<String, Object>) errorObj;
+                janusResponse.setError((String) error.get("reason"));
+                if (error.containsKey("code")) {
+                    janusResponse.setErrorCode(((Number) error.get("code")).intValue());
+                }
+            } else if (errorObj instanceof String) {
+                janusResponse.setError((String) errorObj);
+            }
         }
         
         return janusResponse;
@@ -639,4 +775,5 @@ public class JanusService {
         return UUID.randomUUID().toString();
     }
 }
+
 

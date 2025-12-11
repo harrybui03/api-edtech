@@ -3,6 +3,7 @@ package com.example.backend.controller;
 import com.example.backend.dto.request.enrollment.CurrentEnrollmentRequest;
 import com.example.backend.dto.response.enrollment.CurrentEnrollmentResponse;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
+import com.example.backend.dto.response.live.EnrolledBatchResponse;
 import com.example.backend.dto.response.payment.PaymentResponse;
 import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.PaymentService;
@@ -93,6 +94,13 @@ public class EnrollmentController {
                 .filterBy(CurrentEnrollmentRequest.FilterBy.BATCH)
                 .build());
         return ResponseEntity.ok(enrollments);
+    }
+
+    @GetMapping("/enrollments/enrolled-batches")
+    @Operation(summary = "List enrolled batches (basic info)", description = "Return array of batches (id, slug, title, startTime, endTime) that current user enrolled")
+    public ResponseEntity<List<EnrolledBatchResponse>> getEnrolledBatchesSimple() {
+        List<EnrolledBatchResponse> batches = enrollmentService.getMyEnrolledBatches();
+        return ResponseEntity.ok(batches);
     }
 
     @GetMapping("/enrollments/my-courses")

@@ -8,6 +8,7 @@ import com.example.backend.dto.request.enrollment.CurrentEnrollmentRequest;
 import com.example.backend.dto.response.enrollment.CurrentEnrollmentResponse;
 import com.example.backend.dto.response.enrollment.EnrollmentResponse;
 import com.example.backend.dto.response.enrollment.BatchEnrollmentResponse;
+import com.example.backend.dto.response.live.EnrolledBatchResponse;
 import com.example.backend.entity.*;
 import com.example.backend.excecption.DataNotFoundException;
 import com.example.backend.excecption.InvalidRequestDataException;
@@ -141,6 +142,25 @@ public class EnrollmentService {
 
         return enrollments.stream()
                 .map(enrollmentMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<EnrolledBatchResponse> getMyEnrolledBatches() {
+        String studentEmail = getCurrentUserEmail();
+        User student = userRepository.findByEmail(studentEmail)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        List<Batch> batches = batchEnrollmentRepository.findBatchesByUserId(student.getId());
+
+        return batches.stream()
+                .map(batch -> EnrolledBatchResponse.builder()
+                        .id(batch.getId())
+                        .slug(batch.getSlug())
+                        .title(batch.getTitle())
+                        .startTime(batch.getStartTime())
+                        .endTime(batch.getEndTime())
+                        .build())
                 .collect(Collectors.toList());
     }
 
