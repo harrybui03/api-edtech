@@ -54,3 +54,7 @@ minio:
 janus:
   server:
     url: http://localhost:8088/janus
+
+rag:
+  api:
+    url: http://localhost:8002
