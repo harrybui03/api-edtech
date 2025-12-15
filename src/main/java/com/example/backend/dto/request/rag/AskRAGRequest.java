@@ -8,6 +8,7 @@ import java.util.List;
 public class AskRAGRequest {
     private String question;
     private String userId;
+    private String lessonId;
     private List<ChatMessage> chatHistory;
 
     @Data
